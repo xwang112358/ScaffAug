@@ -191,21 +191,12 @@ class WelQrateDataset(InMemoryDataset):
                 inchi_list = pd.read_csv(source_path, sep=',')['InChI'].tolist()
                 cid_list = pd.read_csv(source_path, sep=',')['CID'].tolist() 
                 smiles_list = pd.read_csv(source_path, sep=',')['SMILES'].tolist()
-                # if self.task_type == 'regression':
-                #     activity_value_list = pd.read_csv(source_path, sep=',')['activity_value'].tolist()
-                
-                # extract the smiles/inchi column
+
                 for i, mol in tqdm(enumerate(inchi_list), total = len(inchi_list)):
                     pyg_data = inchi2graph(mol)
-
-                    # if pyg_data.valid is False:
-                    #     invalid_id_list.append([mol_id, mol])
-                    #     print('skip 1 invalid mol')
-                    #     continue
                     
                     pyg_data.y = torch.tensor([label], dtype=torch.int) 
-                    # if self.task_type == 'regression':
-                    #     pyg_data.activity_value = torch.tensor([activity_value_list[i]], dtype=torch.float)
+
                     pyg_data.pubchem_cid = torch.tensor([int(cid_list[i])], dtype=torch.int)
                     pyg_data.mol_id = torch.tensor([mol_id], dtype=torch.int)  # index of the molecule in the dataset
                     pyg_data.smiles = smiles_list[i]

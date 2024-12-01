@@ -1,0 +1,17 @@
+GENERAL:
+  seed: 1
+  num_workers: 0
+DATA:
+  dataset_name: AID1798
+  split_scheme: random_cv1
+TRAIN:
+  num_epochs: 100
+  batch_size: 128
+  warmup_iterations: 5000
+  peak_lr: 1e-3
+  end_lr: 1e-6
+  weight_decay: 1e-2
+  early_stop: 30
+
+MODEL:
+  model_name: gcn

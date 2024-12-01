@@ -1,4 +1,3 @@
-
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -12,7 +11,7 @@ from welqrate.utils.evaluation import calculate_logAUC, cal_EF, cal_DCG, cal_BED
 from welqrate.utils.rank_prediction import rank_prediction
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import AdamW
-
+import yaml
 def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
     
     model.train()
@@ -72,14 +71,21 @@ def train(model, dataset, config, device, train_eval=False):
     random.seed(seed)
     np.random.seed(seed)
     
-    # timestamp = datetime.now().strftime("%m-%d-%H-%M")
-    base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}'
+    # Modified base path initialization with versioning
+    base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}0'
+    version = 0
+    while os.path.exists(base_path):
+        version += 1
+        base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}{version}'
+    
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
     log_save_path = os.path.join(base_path, f'train.log')
     metrics_save_path = os.path.join(base_path, f'test_results.txt')
     os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
-    os.makedirs(os.path.dirname(log_save_path), exist_ok=True)
-    os.makedirs(os.path.dirname(metrics_save_path), exist_ok=True)
+    # save config
+    with open(os.path.join(base_path, f'config.yaml'), 'w') as file:
+        yaml.dump(config, file)
+
     
     best_epoch = 0
     best_valid_logAUC = -1
@@ -137,7 +143,7 @@ def train(model, dataset, config, device, train_eval=False):
     with open(metrics_save_path, 'w+') as result_file:
         result_file.write(f'logAUC={test_logAUC}\tEF={test_EF}\tDCG={test_DCG}\tBEDROC={test_BEDROC}\t\n')
     
-    
+    return test_logAUC, test_EF, test_DCG, test_BEDROC
     
 
 def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pred=False, save_path=None):

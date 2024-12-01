@@ -81,17 +81,7 @@ def smiles2graph(smiles_string, removeHs=True, reorder_atoms=False):
 
         if mol is None:
             raise ValueError(f'cannot generate molecule with smiles: {smiles_string}')
-        # Create an empty data object
-            # graph = Data(
-            #     edge_index=np.empty((2, 0), dtype=np.int64),
-            #     edge_attr=np.empty((0, 3), dtype=np.int64),
-            #     x=np.empty((0, 39), dtype=np.int64),
-            #     num_nodes=0,
-            #     num_edges=0,
-            #     smiles=smiles_string,
-            #     valid=False
-            # )
-            # print('Cannot generate molecule with smiles:', smiles_string, 'Returning empty graph')
+
     else:
         # calculate Gasteiger charges
         rdPartialCharges.ComputeGasteigerCharges(mol)
@@ -101,7 +91,7 @@ def smiles2graph(smiles_string, removeHs=True, reorder_atoms=False):
         for atom in mol.GetAtoms():
             atom_features_list.append(atom_to_feature_vector(atom))
 
-        atom_features_list = atomized_mol_level_features(atom_features_list, mol)
+        # atom_features_list = atomized_mol_level_features(atom_features_list, mol)
         x = torch.tensor(atom_features_list, dtype=torch.float32)
 
         # bonds
@@ -116,12 +106,12 @@ def smiles2graph(smiles_string, removeHs=True, reorder_atoms=False):
                 bond_attr = []
                 bond_attr += one_hot_vector(bond.GetBondTypeAsDouble(),
                                             [1.0, 1.5, 2.0, 3.0])
-                is_aromatic = bond.GetIsAromatic()
-                is_conjugated = bond.GetIsConjugated()
-                is_in_ring = bond.IsInRing()
-                bond_attr.append(is_aromatic)
-                bond_attr.append(is_conjugated)
-                bond_attr.append(is_in_ring)
+                # is_aromatic = bond.GetIsAromatic()
+                # is_conjugated = bond.GetIsConjugated()
+                # is_in_ring = bond.IsInRing()
+                # bond_attr.append(is_aromatic)
+                # bond_attr.append(is_conjugated)
+                # bond_attr.append(is_in_ring)
 
                 # add edges in both directions
                 edges_list.append((i, j))
@@ -176,17 +166,17 @@ def inchi2graph(inchi_string, removeHs=True, reorder_atoms=False):
         
         # atoms
         atom_features_list = []
-        atom_num_list = []
-        one_hot_atom_list = []
+        # atom_num_list = []
+        # one_hot_atom_list = []
         for atom in mol.GetAtoms():
-            atom_num_list.append(atom.GetAtomicNum())
+            # atom_num_list.append(atom.GetAtomicNum())
             atom_features_list.append(atom_to_feature_vector(atom))
-            one_hot_atom_list.append(atom_to_one_hot_vector(atom))
+            # one_hot_atom_list.append(atom_to_one_hot_vector(atom))
 
-        atom_features_list = atomized_mol_level_features(atom_features_list, mol)
+        # atom_features_list = atomized_mol_level_features(atom_features_list, mol)
         x = torch.tensor(atom_features_list, dtype=torch.float32)
-        atom_num = torch.tensor(atom_num_list, dtype=torch.int64)
-        one_hot_atom = torch.tensor(one_hot_atom_list, dtype=torch.int64)
+        # atom_num = torch.tensor(atom_num_list, dtype=torch.int64)
+        # one_hot_atom = torch.tensor(one_hot_atom_list, dtype=torch.int64)
 
         # bond features: bond type, bond stereo, is_conjugated
         if len(mol.GetBonds()) > 0:  # mol has bonds
@@ -199,12 +189,12 @@ def inchi2graph(inchi_string, removeHs=True, reorder_atoms=False):
                 bond_attr = []
                 bond_attr += one_hot_vector(bond.GetBondTypeAsDouble(),
                                             [1.0, 1.5, 2.0, 3.0])
-                is_aromatic = bond.GetIsAromatic()
-                is_conjugated = bond.GetIsConjugated()
-                is_in_ring = bond.IsInRing()
-                bond_attr.append(is_aromatic)
-                bond_attr.append(is_conjugated)
-                bond_attr.append(is_in_ring)
+                # is_aromatic = bond.GetIsAromatic()
+                # is_conjugated = bond.GetIsConjugated()
+                # is_in_ring = bond.IsInRing()
+                # bond_attr.append(is_aromatic)
+                # bond_attr.append(is_conjugated)
+                # bond_attr.append(is_in_ring)
 
                 # add edges in both directions
                 edges_list.append((i, j))
@@ -224,8 +214,6 @@ def inchi2graph(inchi_string, removeHs=True, reorder_atoms=False):
             edge_index=edge_index,
             edge_attr=edge_attr,
             x=x,
-            one_hot_atom=one_hot_atom,
-            atom_num=atom_num,
             num_nodes=torch.tensor([len(x)]),
             num_edges=len(edge_index[0]),
             inchi=inchi_string,

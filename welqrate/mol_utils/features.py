@@ -68,25 +68,25 @@ def atom_to_feature_vector(atom):
     """
     atom_feature = []
     atom_feature += one_hot_vector(atom.GetAtomicNum(), [1, 6, 7, 8, 9, 14, 15, 16, 17, 35, 53, 999])
-    atom_feature += one_hot_vector(len(atom.GetNeighbors()), list(range(1, 5)))
-    atom_feature.append(atom.GetFormalCharge())
-    atom_feature.append(atom.IsInRing())
-    atom_feature.append(atom.GetIsAromatic())
-    atom_feature.append(atom.GetExplicitValence())
-    atom_feature.append(atom.GetMass())
+    # atom_feature += one_hot_vector(len(atom.GetNeighbors()), list(range(1, 5)))
+    # atom_feature.append(atom.GetFormalCharge())
+    # atom_feature.append(atom.IsInRing())
+    # atom_feature.append(atom.GetIsAromatic())
+    # atom_feature.append(atom.GetExplicitValence())
+    # atom_feature.append(atom.GetMass())
 
-    # Add Gasteiger charge and set to 0 if it is NaN or Infinite
-    gasteiger_charge = float(atom.GetProp('_GasteigerCharge'))
-    if math.isnan(gasteiger_charge) or math.isinf(gasteiger_charge):
-        gasteiger_charge = 0
-    atom_feature.append(gasteiger_charge)
+    # # Add Gasteiger charge and set to 0 if it is NaN or Infinite
+    # gasteiger_charge = float(atom.GetProp('_GasteigerCharge'))
+    # if math.isnan(gasteiger_charge) or math.isinf(gasteiger_charge):
+    #     gasteiger_charge = 0
+    # atom_feature.append(gasteiger_charge)
 
-    # Add Gasteiger H charge and set to 0 if it is NaN or Infinite
-    gasteiger_h_charge = float(atom.GetProp('_GasteigerHCharge'))
-    if math.isnan(gasteiger_h_charge) or math.isinf(gasteiger_h_charge):
-        gasteiger_h_charge = 0
+    # # Add Gasteiger H charge and set to 0 if it is NaN or Infinite
+    # gasteiger_h_charge = float(atom.GetProp('_GasteigerHCharge'))
+    # if math.isnan(gasteiger_h_charge) or math.isinf(gasteiger_h_charge):
+    #     gasteiger_h_charge = 0
 
-    atom_feature.append(gasteiger_h_charge)
+    # atom_feature.append(gasteiger_h_charge)
 
     return atom_feature
 
