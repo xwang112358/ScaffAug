@@ -34,11 +34,11 @@ class GCN_Model(torch.nn.Module):
         )
         self.pool = global_add_pool
         self.one_hot = one_hot
-        self.ffn_dropout = Dropout(p=0.25)
+        # self.ffn_dropout = Dropout(p=0.25)
         self.lin1 = Linear(hidden_channels, 64)
         self.lin2 = Linear(64, 1)
         self.activate_func = ReLU()
-        self.ff_dropout = Dropout(p=0.25)
+        # self.ff_dropout = Dropout(p=0.25)
 
     def forward(self, batch_data):
         if self.one_hot:
@@ -52,6 +52,8 @@ class GCN_Model(torch.nn.Module):
             edge_index = batch_data.edge_index
             node_embedding = self.encoder(x, edge_index)
         graph_embedding = self.pool(node_embedding, batch_data.batch)
-        graph_embedding = self.ffn_dropout(graph_embedding)
-        prediction = self.lin2(self.activate_func(self.ff_dropout(self.lin1(graph_embedding))))
+        # graph_embedding = self.ffn_dropout(graph_embedding)
+        prediction = self.lin2(self.activate_func(self.lin1(graph_embedding)))
+        # prediction = torch.sigmoid(prediction)
+        
         return prediction

@@ -12,31 +12,53 @@ from welqrate.utils.rank_prediction import rank_prediction
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import AdamW
 import yaml
+from torch_geometric.loader import DataLoader
 
-
-def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
-    
+def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss_fn, aug_weight=0.3):
+    """
+    Train with weighted losses where aug_weight controls augmentation importance
+    aug_weight: float between 0 and 1 (default 0.3) - weight for augmentation loss
+    """
     model.train()
     loss_list = []
+    aug_loss_list = []
 
-    for i, batch in enumerate(tqdm(loader, miniters=100)):
+    # Train on original dataset
+    for i, batch in enumerate(tqdm(loader, miniters=100, desc="Original")):
         batch.to(device)
-        # assert batch.edge_index.max() < batch.x.size(0), f"Edge index {batch.edge_index.max()} exceeds number of nodes"
         y_pred = model(batch)
+        loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
         
-        loss= loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-            
+        # Original loss has weight of (1 - aug_weight)
+        weighted_loss = (1 - aug_weight) * loss
+        
         loss_list.append(loss.item())
         optimizer.zero_grad()
-        loss.backward()
+        weighted_loss.backward()
         optimizer.step()
         scheduler.step()
 
-    loss = np.mean(loss_list)
-    return loss
+    # Train on augmented dataset with reduced importance
+    for i, aug_batch in enumerate(tqdm(aug_loader, miniters=100, desc="Augmented")):
+        aug_batch.to(device)
+        y_pred = model(aug_batch)
+        aug_loss = loss_fn(y_pred.view(-1), aug_batch.y.view(-1).float())
+        
+        # Apply weight to augmentation loss
+        weighted_aug_loss = aug_weight * aug_loss
+        
+        aug_loss_list.append(aug_loss.item())
+        optimizer.zero_grad()
+        weighted_aug_loss.backward()
+        optimizer.step()
+        scheduler.step()
+
+    avg_loss = np.mean(loss_list)
+    avg_aug_loss = np.mean(aug_loss_list)
+    return avg_loss, avg_aug_loss
 
 
-def train(model, dataset, config, device, train_eval=False):
+def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_weight=0.3):
     # train params: batch_size, num_epochs, weight_decay, peark_lr, ...
     # split_scheme --> dataset --> loaders 
     # load train info
@@ -58,6 +80,7 @@ def train(model, dataset, config, device, train_eval=False):
     # create loader
     split_dict = dataset.get_idx_split(split_scheme)
     train_loader = get_train_loader(dataset[split_dict['train']], batch_size, num_workers, seed)
+    aug_train_loader = DataLoader(aug_dataset, batch_size=batch_size)
     valid_loader = get_valid_loader(dataset[split_dict['valid']], batch_size, num_workers, seed)
     test_loader = get_test_loader(dataset[split_dict['test']], batch_size, num_workers, seed) 
 
@@ -74,11 +97,11 @@ def train(model, dataset, config, device, train_eval=False):
     np.random.seed(seed)
     
     # Modified base path initialization with versioning
-    base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}0'
+    base_path = f'./results/{dataset_name}_aug/{split_scheme}/{model_name}0'
     version = 0
     while os.path.exists(base_path):
         version += 1
-        base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}{version}'
+        base_path = f'./results/{dataset_name}_aug/{split_scheme}/{model_name}{version}'
     
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
     log_save_path = os.path.join(base_path, f'train.log')
@@ -96,8 +119,9 @@ def train(model, dataset, config, device, train_eval=False):
     
     with open(log_save_path, 'w+') as out_file:
         for epoch in range(num_epochs):
-            
-            train_loss = get_train_loss(model, train_loader, optimizer, scheduler, device, loss_fn)
+            train_loss, aug_loss = get_train_loss(model, train_loader, aug_train_loader, 
+                                                optimizer, scheduler, device, loss_fn,
+                                                aug_weight=aug_weight)
             
             lr = get_lr(optimizer)
             
@@ -153,23 +177,14 @@ def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pre
 
     all_pred_y = []
     all_true_y = []
-    threshold = 0.5  # You can adjust this threshold as needed
-    positive_preds = 0
 
     for i, batch in enumerate(tqdm(loader)):
         batch.to(device)
         pred_y = model(batch).cpu().view(-1).detach().numpy()
         true_y = batch.y.view(-1).cpu().numpy()
-        
-        # Count predictions above threshold
-        positive_preds += np.sum(pred_y >= threshold)
-        
         for j, _ in enumerate(pred_y):
             all_pred_y.append(pred_y[j])
             all_true_y.append(true_y[j])
-    
-    print(f"\nNumber of predictions above threshold ({threshold}): {positive_preds}")
-    print(f"Percentage of positive predictions: {(positive_preds/len(all_pred_y))*100:.2f}%\n")
     
     if save_per_molecule_pred and save_path is not None:
         filename = os.path.join(save_path, f'per_molecule_pred_of_{type}_set.txt')
@@ -194,65 +209,3 @@ def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pre
     return logAUC, EF, DCG, BEDROC
 
 
-
-# def train_class(model, loader, optimizer, scheduler, device, loss_fn):
-#     model.train()
-#     loss_list = []
-
-#     for i, batch in enumerate(tqdm(loader, miniters=100)):
-#         batch = batch.to(device)
-
-#         # Check for isolated nodes
-#         num_nodes = batch.num_nodes
-#         connection_counts = torch.zeros(num_nodes, dtype=torch.int32, device=device)
-#         ones = torch.ones_like(batch.edge_index[0], dtype=torch.int32)
-
-#         connection_counts = scatter_add(ones, batch.edge_index[0], dim=0, dim_size=num_nodes)
-#         connection_counts += scatter_add(ones, batch.edge_index[1], dim=0, dim_size=num_nodes)
-
-#         # Add self-loops to isolated nodes
-#         isolated_nodes = torch.where(connection_counts == 0)[0]
-#         if len(isolated_nodes) > 0:
-#             self_loops = torch.stack([isolated_nodes, isolated_nodes], dim=0)
-#             batch.edge_index = torch.cat([batch.edge_index, self_loops], dim=1)
-
-#             # Update node features if necessary (e.g., for attention mechanisms)
-#             if hasattr(batch, 'edge_attr') and batch.edge_attr is not None:
-#                 # Create self-loop edge attributes (you may need to adjust this based on your edge attributes)
-#                 self_loop_attr = torch.zeros(len(isolated_nodes), batch.edge_attr.size(1), device=device)
-#                 batch.edge_attr = torch.cat([batch.edge_attr, self_loop_attr], dim=0)
-
-
-#         y_pred = model(batch)
-#         loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-        
-#         loss_list.append(loss.item())
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#         scheduler.step()
-
-#     loss = np.mean(loss_list) 
-#     return loss
-
-
-# def train_reg(model, loader, optimizer, scheduler, device, loss_fn):
-    
-#     model.train()
-#     loss_list = []
-
-#     for i, batch in enumerate(tqdm(loader, miniters=100)):
-#         batch.to(device)
-#         # assert batch.edge_index.max() < batch.x.size(0), f"Edge index {batch.edge_index.max()} exceeds number of nodes"
-#         y_pred = model(batch)
-        
-#         loss = loss_fn(y_pred.view(-1), batch.activity_value.view(-1))
-            
-#         loss_list.append(loss.item())
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#         scheduler.step()
-
-#     loss = np.mean(loss_list)
-#     return loss
