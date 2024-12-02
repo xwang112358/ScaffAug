@@ -23,33 +23,25 @@ def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss
     loss_list = []
     aug_loss_list = []
 
-    # Train on original dataset
-    for i, batch in enumerate(tqdm(loader, miniters=100, desc="Original")):
+    # Combined training on original and augmented datasets
+    for (batch, aug_batch) in zip(loader, aug_loader):
+        optimizer.zero_grad()
+        
+        # Forward pass and loss computation on original data
         batch.to(device)
         y_pred = model(batch)
-        loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-        
-        # Original loss has weight of (1 - aug_weight)
-        weighted_loss = (1 - aug_weight) * loss
-        
-        loss_list.append(loss.item())
-        optimizer.zero_grad()
-        weighted_loss.backward()
-        optimizer.step()
-        scheduler.step()
+        orig_loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
+        loss_list.append(orig_loss.item())
 
-    # Train on augmented dataset with reduced importance
-    for i, aug_batch in enumerate(tqdm(aug_loader, miniters=100, desc="Augmented")):
+        # Forward pass and loss computation on augmented data
         aug_batch.to(device)
-        y_pred = model(aug_batch)
-        aug_loss = loss_fn(y_pred.view(-1), aug_batch.y.view(-1).float())
-        
-        # Apply weight to augmentation loss
-        weighted_aug_loss = aug_weight * aug_loss
-        
+        aug_pred = model(aug_batch)
+        aug_loss = loss_fn(aug_pred.view(-1), aug_batch.y.view(-1).float())
         aug_loss_list.append(aug_loss.item())
-        optimizer.zero_grad()
-        weighted_aug_loss.backward()
+
+        # Combine losses and perform single backward pass
+        total_loss = (1 - aug_weight) * orig_loss + aug_weight * aug_loss
+        total_loss.backward()
         optimizer.step()
         scheduler.step()
 
