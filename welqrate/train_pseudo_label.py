@@ -49,14 +49,14 @@ def get_pseudo_labels(model, aug_loader, device, confidence_threshold=0.6):
             
     return pseudo_labels, confident_mask
 
-def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss_fn, aug_weight=0.3):
+def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss_fn, aug_weight=0.3, confidence_threshold=0.6):
     """Modified training loop with pseudo labeling and combined loss"""
     model.train()
     loss_list = []
     aug_loss_list = []
 
     # Generate pseudo labels for augmented data first
-    pseudo_labels, confident_mask = get_pseudo_labels(model, aug_loader, device)
+    pseudo_labels, confident_mask = get_pseudo_labels(model, aug_loader, device, confidence_threshold)
     
     # Combine training on original and augmented data
     for (batch, aug_batch), i in zip(zip(loader, aug_loader), range(len(loader))):
@@ -107,7 +107,7 @@ def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss
     return avg_loss, avg_aug_loss
 
 
-def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_weight=0.3):
+def train(model, dataset, aug_dataset, config, device, train_eval=False):
     # train params: batch_size, num_epochs, weight_decay, peark_lr, ...
     # split_scheme --> dataset --> loaders 
     # load train info
@@ -118,7 +118,8 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_wei
     weight_decay = float(config['TRAIN']['weight_decay'])
     early_stopping_limit = int(config['TRAIN']['early_stop'])
     split_scheme = config['DATA']['split_scheme']
-    
+    aug_weight = float(config['AUGMENTATION']['aug_weight'])
+    confidence_threshold = float(config['AUGMENTATION']['confidence_threshold'])
     loss_fn = BCEWithLogitsLoss()
     
     # load dataset info

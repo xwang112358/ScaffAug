@@ -68,6 +68,7 @@ for hidden_ch, n_layers, lr in param_combinations:
         config['MODEL']['hidden_channels'] = hidden_ch
         config['MODEL']['num_layers'] = n_layers
         config['TRAIN']['peak_lr'] = lr
+        config['DATA']['split_scheme'] = args.split
         
         # Initialize model with current params
         model = GCN_Model(

@@ -59,7 +59,11 @@ class GAT_Model(torch.nn.Module):
             x = batch_data.x
             node_embedding = self.encoder(x, edge_index, edge_attr=edge_attr)
         graph_embedding = self.pool(node_embedding, batch)
-        graph_embedding = self.ffn_dropout(graph_embedding)
+
         # print(graph_embedding.shape)
-        prediction = self.lin2(self.activate_func(self.lin1(graph_embedding)))
+        x = self.lin1(graph_embedding)
+        x = self.activate_func(x)
+        x = self.ffn_dropout(x)
+        prediction = self.lin2(x)
+
         return prediction
