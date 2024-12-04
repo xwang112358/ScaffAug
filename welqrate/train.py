@@ -153,23 +153,15 @@ def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pre
 
     all_pred_y = []
     all_true_y = []
-    threshold = 0.5  # You can adjust this threshold as needed
-    positive_preds = 0
 
     for i, batch in enumerate(tqdm(loader)):
         batch.to(device)
         pred_y = model(batch).cpu().view(-1).detach().numpy()
         true_y = batch.y.view(-1).cpu().numpy()
         
-        # Count predictions above threshold
-        positive_preds += np.sum(pred_y >= threshold)
-        
         for j, _ in enumerate(pred_y):
             all_pred_y.append(pred_y[j])
             all_true_y.append(true_y[j])
-    
-    print(f"\nNumber of predictions above threshold ({threshold}): {positive_preds}")
-    print(f"Percentage of positive predictions: {(positive_preds/len(all_pred_y))*100:.2f}%\n")
     
     if save_per_molecule_pred and save_path is not None:
         filename = os.path.join(save_path, f'per_molecule_pred_of_{type}_set.txt')

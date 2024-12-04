@@ -1,0 +1,1 @@
+python finetune_baseline.py --dataset AID1798 --split random_cv2

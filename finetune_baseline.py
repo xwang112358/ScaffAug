@@ -9,7 +9,12 @@ from pathlib import Path
 import pandas as pd
 import csv
 from datetime import datetime
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', type=str, default='AID1798', required=True)
+parser.add_argument('--split', type=str, default='random_cv1', required=True)
+args = parser.parse_args()
 # Define hyperparameter search space
 hyperparams = {
     'hidden_channels': [32, 64, 128], # 64, 128
@@ -23,7 +28,7 @@ with open('./configs/gcn.yaml') as file:
 
 # Setup dataset
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-dataset = WelQrateDataset(dataset_name='AID1798', root='./welqrate_datasets', mol_repr='2dmol')
+dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets', mol_repr='2dmol')
 
 # Create results directory
 Path('results').mkdir(exist_ok=True)
@@ -39,8 +44,8 @@ param_combinations = list(itertools.product(
 ))
 
 # Get dataset name and split scheme from config
-dataset_name = base_config['DATA']['dataset_name']
-split_scheme = base_config['DATA']['split_scheme']
+dataset_name = args.dataset
+split_scheme = args.split
 
 # Create CSV file with headers
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
