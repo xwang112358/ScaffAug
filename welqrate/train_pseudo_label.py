@@ -49,62 +49,71 @@ def get_pseudo_labels(model, aug_loader, device, confidence_threshold=0.6):
             
     return pseudo_labels, confident_mask
 
-def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss_fn, aug_weight=0.3, confidence_threshold=0.6):
-    """Modified training loop with pseudo labeling and combined loss"""
+def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
+    """Modified training loop for self-training - only train on current training dataset"""
     model.train()
     loss_list = []
-    aug_loss_list = []
 
-    # Generate pseudo labels for augmented data first
-    pseudo_labels, confident_mask = get_pseudo_labels(model, aug_loader, device, confidence_threshold)
-    
-    # Combine training on original and augmented data
-    for (batch, aug_batch), i in zip(zip(loader, aug_loader), range(len(loader))):
+    for batch in loader:
         optimizer.zero_grad()
         
-        # Forward pass and loss computation on original data
+        # Forward pass and loss computation on training data (includes pseudo-labeled samples)
         batch.to(device)
         y_pred = model(batch)
-        orig_loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-        loss_list.append(orig_loss.item())
+        loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
+        loss_list.append(loss.item())
 
-        # Forward pass and loss computation on augmented data
-        aug_batch.to(device)
-        batch_size = aug_batch.y.size(0)
-        start_idx = i * batch_size
-        end_idx = start_idx + batch_size
-        
-        # Get confident pseudo labels for this batch
-        batch_confident = confident_mask[start_idx:end_idx]
-        
-        # Only compute augmented loss if there are confident predictions
-        if batch_confident.any():
-            aug_pred = model(aug_batch)
-            batch_pseudo_labels = pseudo_labels[start_idx:end_idx]
-            
-            # Ensure all tensors have matching dimensions
-            aug_pred = aug_pred.view(-1).to(device)
-            batch_pseudo_labels = batch_pseudo_labels.view(-1).to(device)
-            batch_confident = batch_confident.to(device)
-            
-            # Compute loss only for confident predictions
-            aug_loss = loss_fn(
-                aug_pred[batch_confident.squeeze()].view(-1),
-                batch_pseudo_labels[batch_confident.squeeze()].view(-1)
-            )
-            aug_loss_list.append(aug_loss.item())
-        else:
-            aug_loss = torch.tensor(0.0, device=device)
-
-        # Combine losses and perform single backward pass
-        total_loss = (1 - aug_weight) * orig_loss + aug_weight * aug_loss
-        total_loss.backward()
+        # Backward pass
+        loss.backward()
         optimizer.step()
         scheduler.step()
 
     avg_loss = np.mean(loss_list)
-    avg_aug_loss = np.mean(aug_loss_list) if aug_loss_list else 0
-    return avg_loss, avg_aug_loss
+    return avg_loss
+
+def update_datasets_with_confident_samples(model, train_dataset, aug_dataset, 
+                                           device, confidence_threshold=0.6, batch_size=128):
+    """
+    Identifies confident samples from aug_dataset and moves them to train_dataset
+    Returns: updated train_dataset, remaining_aug_dataset
+    """
+    model.eval()
+    remaining_aug_dataset = []
+    added_to_train = 0
+    
+    # Process augmented samples in batches
+    aug_loader = DataLoader(aug_dataset, batch_size=batch_size)
+    
+    with torch.no_grad():
+        for batch_idx, aug_batch in enumerate(aug_loader):
+            aug_batch.to(device)
+            logits = model(aug_batch)
+            probs = torch.sigmoid(logits)
+            
+            # Identify confident predictions
+            confident = (probs > confidence_threshold) | (probs < (1 - confidence_threshold))
+            pseudo_labels = (probs > 0.5).float()
+            
+            # Process each sample in the batch
+            for i, is_confident in enumerate(confident):
+                idx = batch_idx * batch_size + i
+                if idx >= len(aug_dataset):  # Handle last batch
+                    break
+                    
+                if is_confident:
+                    # Add to training dataset with pseudo label
+                    sample = aug_dataset[idx]
+                    sample.y = pseudo_labels[i].item()
+                    train_dataset.append(sample)
+                    added_to_train += 1
+                else:
+                    # Keep in augmented dataset
+                    remaining_aug_dataset.append(aug_dataset[idx])
+    
+    print(f"Moved {added_to_train} confident samples to training dataset")
+    print(f"Remaining augmented samples: {len(remaining_aug_dataset)}")
+    
+    return train_dataset, remaining_aug_dataset
 
 
 def train(model, dataset, aug_dataset, config, device, train_eval=False):
@@ -127,13 +136,19 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False):
     root = dataset.root
     mol_repr = dataset.mol_repr
     
-    # create loader
+    # Get the split indices
     split_dict = dataset.get_idx_split(split_scheme)
-    train_loader = get_train_loader(dataset[split_dict['train']], batch_size, num_workers, seed)
-    aug_train_loader = DataLoader(aug_dataset, batch_size=batch_size)
-    valid_loader = get_valid_loader(dataset[split_dict['valid']], batch_size, num_workers, seed)
-    test_loader = get_test_loader(dataset[split_dict['test']], batch_size, num_workers, seed) 
-
+    
+    # Create the actual training dataset
+    train_dataset = dataset[split_dict['train']]
+    valid_dataset = dataset[split_dict['valid']]
+    test_dataset = dataset[split_dict['test']]
+    
+    # Create loaders
+    train_loader = get_train_loader(train_dataset, batch_size, num_workers, seed)
+    valid_loader = get_valid_loader(valid_dataset, batch_size, num_workers, seed)
+    test_loader = get_test_loader(test_dataset, batch_size, num_workers, seed)
+    
     # load model info
     model_name = config['MODEL']['model_name']
 
@@ -161,23 +176,38 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False):
     with open(os.path.join(base_path, f'config.yaml'), 'w') as file:
         yaml.dump(config, file)
 
-    
     best_epoch = 0
     best_valid_logAUC = -1
     early_stopping_counter = 0
     print(f'Training with early stopping limit of {early_stopping_limit} epochs')
     
+    # Track augmented dataset
+    current_aug_dataset = aug_dataset
+    
     with open(log_save_path, 'w+') as out_file:
         for epoch in range(num_epochs):
-            train_loss, aug_loss = get_train_loss(model, train_loader, aug_train_loader, 
-                                                optimizer, scheduler, device, loss_fn,
-                                                aug_weight=aug_weight)
+            # Update datasets with confident samples
+            train_dataset, current_aug_dataset = update_datasets_with_confident_samples(
+                model, 
+                train_dataset,  # Pass the actual training dataset
+                current_aug_dataset,
+                device, 
+                confidence_threshold
+            )
+            
+            # Update loader with new training dataset
+            train_loader = get_train_loader(train_dataset, batch_size, num_workers, seed)
+            aug_train_loader = DataLoader(current_aug_dataset, batch_size=batch_size)
+            
+            # Regular training step
+            train_loss = get_train_loss(
+                model, train_loader, optimizer, scheduler, device, loss_fn)
             
             lr = get_lr(optimizer)
             
             if train_eval:
                 train_logAUC, train_EF, train_DCG, train_BEDROC = get_test_metrics(model, train_loader, device)
-                print(f'current_epoch={epoch} train_loss={train_loss:.4f} aug_loss={aug_loss:.4f} lr={lr}')
+                print(f'current_epoch={epoch} train_loss={train_loss:.4f} lr={lr}')
                 print(f'train_logAUC={train_logAUC:.4f} train_EF={train_EF:.4f} train_DCG={train_DCG:.4f} train_BEDROC={train_BEDROC:.4f}')
                 out_file.write(f'Epoch:{epoch}\tloss={train_loss}\tlogAUC={train_logAUC}\tEF={train_EF}\tDCG={train_DCG}\tBEDROC={train_BEDROC}\tlr={lr}\t\n')
             
