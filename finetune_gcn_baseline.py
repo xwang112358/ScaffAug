@@ -5,7 +5,7 @@ from welqrate.train import train
 import yaml
 import itertools
 import copy
-from pathlib import Path
+import os
 import pandas as pd
 import csv
 from datetime import datetime
@@ -15,7 +15,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
 parser.add_argument('--split', type=str, default='random_cv1', required=True)
 args = parser.parse_args()
-# Define hyperparameter search space
+
+# Define hyperparameter search space for GCN
 hyperparams = {
     'hidden_channels': [32, 64, 128], # 64, 128
     'num_layers': [2, 3, 4], #  3, 4
@@ -31,7 +32,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets', mol_repr='2dmol')
 
 # Create results directory
-Path('results').mkdir(exist_ok=True)
+os.makedirs('results', exist_ok=True)
 
 # Initialize results DataFrame
 results_data = []
@@ -83,13 +84,13 @@ for hidden_ch, n_layers, lr in param_combinations:
         print(f"Peak learning rate: {lr}")
         
         # Train model and get metrics
-        test_logAUC, test_EF, test_DCG, test_BEDROC = train(model, dataset, config, device)
+        test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model, dataset, config, device)
         
         # Extract metrics
         test_metrics = [
             test_logAUC,
-            test_EF,
-            test_DCG,
+            test_EF100,
+            test_DCG100,
             test_BEDROC
         ]
         
@@ -104,8 +105,8 @@ for hidden_ch, n_layers, lr in param_combinations:
             'num_layers': n_layers,
             'peak_lr': lr,
             'test_logAUC': test_logAUC,
-            'test_EF': test_EF,
-            'test_DCG': test_DCG,
+            'test_EF100': test_EF100,
+            'test_DCG100': test_DCG100,
             'test_BEDROC': test_BEDROC
         })
         
@@ -118,23 +119,99 @@ for hidden_ch, n_layers, lr in param_combinations:
             writer = csv.writer(f)
             writer.writerow([hidden_ch, n_layers, lr, 'ERROR', 'ERROR', 'ERROR', 'ERROR'])
 
-# # Create DataFrame and save as CSV
-# df = pd.DataFrame(results_data)
 
-# # Find best parameters for each metric
-# best_params = {
-#     'logAUC': df.loc[df['test_logAUC'].idxmax()],
-#     'EF': df.loc[df['test_EF'].idxmax()],
-#     'DCG': df.loc[df['test_DCG'].idxmax()],
-#     'BEDROC': df.loc[df['test_BEDROC'].idxmax()]
-# }
+# Convert results to DataFrame for analysis
+results_df = pd.DataFrame(results_data)
+final_results_csv = f'results/gcn_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
 
-# # Save best parameters to a separate file
-# with open(best_params_file, 'w') as f:
-#     f.write(f"Best parameters for {dataset_name} dataset with {split_scheme} split:\n\n")
-#     for metric, params in best_params.items():
-#         f.write(f"\nBest for {metric}:\n")
-#         for key, value in params.items():
-#             f.write(f"{key}: {value}\n")
+if not results_df.empty:
+    # Find parameters with best test_logAUC
+    best_params = results_df.loc[results_df['test_logAUC'].idxmax()]
+    print("\nBest parameters found:")
+    print(f"Hidden channels: {best_params['hidden_channels']}")
+    print(f"Number of layers: {best_params['num_layers']}")
+    print(f"Peak learning rate: {best_params['peak_lr']}")
+    print(f"Best test logAUC: {best_params['test_logAUC']:.4f}")
 
-print("\nFinetuning completed. Results saved in:", csv_file)
+    # Run with different seeds
+    seeds = [1, 2, 3]
+    seed_results = []
+
+    for seed in seeds:
+        print(f"\nRunning with seed {seed}")
+        config['GENERAL']['seed'] = seed
+        
+        try:
+            # Initialize model with best params
+            model = GCN_Model(
+                in_channels=12,
+                hidden_channels=int(best_params['hidden_channels']),
+                num_layers=int(best_params['num_layers']),
+            ).to(device)
+
+            # Train model and get metrics
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model, dataset, config, device)
+            
+            seed_results.append({
+                'seed': seed,
+                'test_logAUC': test_logAUC,
+                'test_EF100': test_EF100, 
+                'test_DCG100': test_DCG100,
+                'test_BEDROC': test_BEDROC,
+                'test_EF500': test_EF500,
+                'test_EF1000': test_EF1000,
+                'test_DCG500': test_DCG500,
+                'test_DCG1000': test_DCG1000
+            })
+
+            # Save seed results to CSV
+            with open(final_results_csv, 'a', newline='') as f:
+                writer = csv.writer(f)
+                if f.tell() == 0:  # Add header if file is empty
+                    writer.writerow([
+                        'hidden_channels',
+                        'num_layers',
+                        'peak_lr', 
+                        'test_logAUC',
+                        'test_EF100',
+                        'test_DCG100',
+                        'test_BEDROC',
+                        'test_EF500', 
+                        'test_EF1000',
+                        'test_DCG500',
+                        'test_DCG1000',
+                        'seed'
+                    ])
+                writer.writerow([
+                    best_params['hidden_channels'],
+                    best_params['num_layers'],
+                    best_params['peak_lr'],
+                    test_logAUC,
+                    test_EF100, 
+                    test_DCG100,
+                    test_BEDROC,
+                    test_EF500,
+                    test_EF1000,
+                    test_DCG500,
+                    test_DCG1000,
+                    seed
+                ])
+
+        except Exception as e:
+            print(f"Error occurred with seed {seed}")
+            print(f"Error message: {str(e)}")
+
+    # Print summary statistics
+    if seed_results:
+        seed_df = pd.DataFrame(seed_results)
+        print("\nResults across seeds:")
+        print(f"Mean test logAUC: {seed_df['test_logAUC'].mean():.4f} ± {seed_df['test_logAUC'].std():.4f}")
+        print(f"Mean test EF100: {seed_df['test_EF100'].mean():.4f} ± {seed_df['test_EF100'].std():.4f}")
+        print(f"Mean test DCG100: {seed_df['test_DCG100'].mean():.4f} ± {seed_df['test_DCG100'].std():.4f}")
+        print(f"Mean test BEDROC: {seed_df['test_BEDROC'].mean():.4f} ± {seed_df['test_BEDROC'].std():.4f}")
+        print(f"Mean test EF500: {seed_df['test_EF500'].mean():.4f} ± {seed_df['test_EF500'].std():.4f}")
+        print(f"Mean test EF1000: {seed_df['test_EF1000'].mean():.4f} ± {seed_df['test_EF1000'].std():.4f}")
+        print(f"Mean test DCG500: {seed_df['test_DCG500'].mean():.4f} ± {seed_df['test_DCG500'].std():.4f}")
+        print(f"Mean test DCG1000: {seed_df['test_DCG1000'].mean():.4f} ± {seed_df['test_DCG1000'].std():.4f}")
+
+

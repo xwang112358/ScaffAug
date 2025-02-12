@@ -138,17 +138,17 @@ def train(model, dataset, config, device, train_eval=False):
         raise Exception(f'Model not found at {model_save_path}')
    
     print('Testing ...')
-    test_logAUC, test_EF, test_DCG, test_BEDROC = get_test_metrics(model, test_loader, device, 
+    test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = get_test_metrics(model, test_loader, device, 
                                                                    save_per_molecule_pred=True,
-                                                                   save_path=base_path)
-    print(f'{model_name} at epoch {best_epoch} test logAUC: {test_logAUC:.4f} test EF: {test_EF:.4f} test DCG: {test_DCG:.4f} test BEDROC: {test_BEDROC:.4f}')
+                                                                   save_path=base_path, extra_metrics=True)
+    print(f'{model_name} at epoch {best_epoch} test logAUC: {test_logAUC:.4f} test EF: {test_EF100:.4f} test DCG: {test_DCG100:.4f} test BEDROC: {test_BEDROC:.4f}')
     with open(metrics_save_path, 'w+') as result_file:
-        result_file.write(f'logAUC={test_logAUC}\tEF={test_EF}\tDCG={test_DCG}\tBEDROC={test_BEDROC}\t\n')
+        result_file.write(f'logAUC={test_logAUC}\tEF100={test_EF100}\tDCG100={test_DCG100}\tBEDROC={test_BEDROC}\tEF500={test_EF500}\tEF1000={test_EF1000}\tDCG500={test_DCG500}\tDCG1000={test_DCG1000}\n')
     
-    return test_logAUC, test_EF, test_DCG, test_BEDROC
+    return test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000
     
 
-def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pred=False, save_path=None):
+def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pred=False, save_path=None, extra_metrics=False):
     model.eval()
 
     all_pred_y = []
@@ -180,10 +180,18 @@ def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pre
     all_pred_y = np.array(all_pred_y)
     all_true_y = np.array(all_true_y)
     logAUC = calculate_logAUC(all_true_y, all_pred_y)
-    EF = cal_EF(all_true_y, all_pred_y, 100)
-    DCG = cal_DCG(all_true_y, all_pred_y, 100)
+    EF100 = cal_EF(all_true_y, all_pred_y, 100)
+    DCG100 = cal_DCG(all_true_y, all_pred_y, 100)
     BEDROC = cal_BEDROC_score(all_true_y, all_pred_y)
-    return logAUC, EF, DCG, BEDROC
+
+    if extra_metrics:
+        EF500 = cal_EF(all_true_y, all_pred_y, 500)
+        EF1000 = cal_EF(all_true_y, all_pred_y, 1000)
+        DCG500 = cal_DCG(all_true_y, all_pred_y, 500)
+        DCG1000 = cal_DCG(all_true_y, all_pred_y, 1000)
+        return logAUC, EF100, DCG100, BEDROC, EF500, EF1000, DCG500, DCG1000
+    else:
+        return logAUC, EF100, DCG100, BEDROC
 
 
 
