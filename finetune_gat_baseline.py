@@ -18,11 +18,18 @@ args = parser.parse_args()
 
 # Define hyperparameter search space for GAT
 hyperparams = {
-    'hidden_channels': [32, 64, 128],
+    'hidden_channels': [32, 64, 128], 
     'num_layers': [3, 4, 5],
     'peak_lr': [1e-2, 1e-3, 1e-4],
     'heads': [4, 8]
 }
+
+# hyperparams = {
+#     'hidden_channels': [32], 
+#     'num_layers': [3],
+#     'peak_lr': [1e-2],
+#     'heads': [4, 8]
+# }
 
 # Load base config
 with open('./configs/gat.yaml') as file:
