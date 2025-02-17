@@ -11,7 +11,7 @@ TRAIN:
   peak_lr: 1e-3
   end_lr: 1e-6
   weight_decay: 1e-2
-  early_stop: 50
+  early_stop: 100
 AUGMENTATION:
   confidence_threshold: 0.7
   aug_weight: 1.0

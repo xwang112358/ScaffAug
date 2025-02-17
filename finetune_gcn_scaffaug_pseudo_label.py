@@ -62,57 +62,59 @@ best_params_file = f'scaffaug_results/best_parameters_{args.dataset}_{args.split
 for hidden_ch, n_layers, lr, confidence_threshold in param_combinations:
     
     # Update config
-    config = copy.deepcopy(base_config)
-    config['MODEL']['hidden_channels'] = hidden_ch
-    config['MODEL']['num_layers'] = n_layers
-    config['TRAIN']['peak_lr'] = lr
-    config['AUGMENTATION']['confidence_threshold'] = confidence_threshold
-    config['DATA']['split_scheme'] = args.split
+    try:
+        config = copy.deepcopy(base_config)
+        config['MODEL']['hidden_channels'] = hidden_ch
+        config['MODEL']['num_layers'] = n_layers
+        config['TRAIN']['peak_lr'] = lr
+        config['AUGMENTATION']['confidence_threshold'] = confidence_threshold
+        config['DATA']['split_scheme'] = args.split
 
-    # Initialize model with current params
-    model = GCN_Model(
-        in_channels=12,
-        hidden_channels=hidden_ch,
-        num_layers=n_layers,
-    ).to(device)
-    
-    print(f"\nTraining with parameters:")
-    print(f"Hidden channels: {hidden_ch}")
-    print(f"Number of layers: {n_layers}")
-    print(f"Peak learning rate: {lr}")
-    print(f"Confidence threshold: {confidence_threshold}")
-    
-    # Train model and get metrics
-    test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_pseudo_label(
-        model, original_dataset, augmented_dataset, config, device
-    )
+        # Initialize model with current params
+        model = GCN_Model(
+            in_channels=12,
+            hidden_channels=hidden_ch,
+            num_layers=n_layers,
+        ).to(device)
+        
+        print(f"\nTraining with parameters:")
+        print(f"Hidden channels: {hidden_ch}")
+        print(f"Number of layers: {n_layers}")
+        print(f"Peak learning rate: {lr}")
+        print(f"Confidence threshold: {confidence_threshold}")
+        
+        # Train model and get metrics
+        test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_pseudo_label(
+            model, original_dataset, augmented_dataset, config, device
+        )
 
-    test_metrics = [
-        test_logAUC,
-        test_EF100,
-        test_DCG100,
-        test_BEDROC
-    ]
+        test_metrics = [
+            test_logAUC,
+            test_EF100,
+            test_DCG100,
+            test_BEDROC
+        ]
 
-    with open(csv_file, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([hidden_ch, n_layers, lr, confidence_threshold] + test_metrics)
-    
-    results_data.append({
-        'hidden_channels': hidden_ch,
-        'num_layers': n_layers,
-        'peak_lr': lr,
-        'confidence_threshold': confidence_threshold,
-        'test_logAUC': test_logAUC,
-        'test_EF': test_EF100,
-        'test_DCG': test_DCG100,
-        'test_BEDROC': test_BEDROC
-    })
-    
-    # Save error in CSV
-    with open(csv_file, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([hidden_ch, n_layers, lr, confidence_threshold] + ['ERROR'] * 8)
+        with open(csv_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([hidden_ch, n_layers, lr, confidence_threshold] + test_metrics)
+        
+        results_data.append({
+            'hidden_channels': hidden_ch,
+            'num_layers': n_layers,
+            'peak_lr': lr,
+            'confidence_threshold': confidence_threshold,
+            'test_logAUC': test_logAUC,
+            'test_EF': test_EF100,
+            'test_DCG': test_DCG100,
+            'test_BEDROC': test_BEDROC
+        })
+    except Exception as e:
+        print(f"Error occurred with parameters: {hidden_ch}, {n_layers}, {lr}, {confidence_threshold}")
+        print(f"Error message: {str(e)}")
+        with open(csv_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([hidden_ch, n_layers, lr, confidence_threshold] + ['ERROR'] * 8)
 
 results_df = pd.DataFrame(results_data)
 final_results_csv = f'scaffaug_results/scaffaug_st_gcn_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
