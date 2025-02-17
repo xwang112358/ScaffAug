@@ -5,15 +5,15 @@ DATA:
   dataset_name: AID1798
   split_scheme: random_cv1
 TRAIN:
-  num_epochs: 100
+  num_epochs: 150 # check if this is correct
   batch_size: 128
   warmup_iterations: 5000
   peak_lr: 1e-3
   end_lr: 1e-6
   weight_decay: 1e-2
-  early_stop: 1000
+  early_stop: 50
 AUGMENTATION:
-  aug_weight: 0.1
-  confidence_threshold: 0.6
+  confidence_threshold: 0.7
+  aug_weight: 1.0
 MODEL:
   model_name: gcn

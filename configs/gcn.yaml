@@ -5,7 +5,7 @@ DATA:
   dataset_name: AID1798
   split_scheme: random_cv1
 TRAIN:
-  num_epochs: 100
+  num_epochs: 200
   batch_size: 128
   warmup_iterations: 5000
   peak_lr: 1e-3

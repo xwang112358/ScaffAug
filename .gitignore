@@ -2,3 +2,6 @@ results
 welqrate_datasets
 arxiv
 generated_graphs
+augment_pyg_datasets
+scaffaug_results
+augment_datasets

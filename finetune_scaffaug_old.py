@@ -17,10 +17,18 @@ parser.add_argument('--ratio', type=float, default=0.1, required=True)
 args = parser.parse_args()
 
 # Define hyperparameter search space
+# hyperparams = {
+#     'hidden_channels': [32, 64, 128],
+#     'num_layers': [2, 3, 4],
+#     'peak_lr': [1e-2, 1e-3, 1e-4],
+#     'aug_weight': [0.2],
+#     'confidence_threshold': [0.6]
+# }
+
 hyperparams = {
-    'hidden_channels': [32, 64, 128],
-    'num_layers': [2, 3, 4],
-    'peak_lr': [1e-2, 1e-3, 1e-4],
+    'hidden_channels': [128],
+    'num_layers': [3],
+    'peak_lr': [1e-3],
     'aug_weight': [0.2],
     'confidence_threshold': [0.6]
 }
@@ -44,7 +52,7 @@ with open(csv_file, 'w', newline='') as f:
     ])
 
 # Load datasets
-augmented_dataset = torch.load(f'./welqrate_datasets/augmentation/{args.dataset}_{args.split}_{args.ratio}_generated_graphs.pt')
+augmented_dataset = torch.load(f'./augment_pyg_datasets/{args.dataset}_{args.split}_{args.ratio}_generated_pyg_graphs.pt')
 original_dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets', mol_repr='2dmol')
 
 # Generate all combinations of hyperparameters
