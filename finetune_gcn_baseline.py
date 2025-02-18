@@ -1,7 +1,8 @@
 from welqrate.dataset import WelQrateDataset
 from welqrate.models.gnn2d.GCN import GCN_Model 
 import torch
-from welqrate.train import train
+from welqrate.train import train as train
+from welqrate.train_aug import train as train_aug
 import yaml
 import itertools
 import copy
@@ -14,6 +15,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
 parser.add_argument('--split', type=str, default='random_cv1', required=True)
+parser.add_argument('--aug', action='store_true')
 args = parser.parse_args()
 
 # Define hyperparameter search space for GCN
@@ -29,10 +31,13 @@ with open('./configs/gcn.yaml') as file:
 
 # Setup dataset
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
 dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets', mol_repr='2dmol')
 
 # Create results directory
 os.makedirs('results', exist_ok=True)
+os.makedirs('results_aug', exist_ok=True)
 
 # Initialize results DataFrame
 results_data = []
@@ -59,7 +64,10 @@ with open(csv_file, 'w', newline='') as f:
     ])
 
 # Also update the best parameters filename
-best_params_file = f'results/best_parameters_{dataset_name}_{split_scheme}_{timestamp}.txt'
+if args.aug:
+    best_params_file = f'results_aug/best_parameters_{dataset_name}_{split_scheme}_{timestamp}.txt'
+else:
+    best_params_file = f'results/best_parameters_{dataset_name}_{split_scheme}_{timestamp}.txt'
 
 # Run training for each combination
 for hidden_ch, n_layers, lr in param_combinations:
@@ -84,7 +92,11 @@ for hidden_ch, n_layers, lr in param_combinations:
         print(f"Peak learning rate: {lr}")
         
         # Train model and get metrics
-        test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model, dataset, config, device)
+        if args.aug:
+            aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model, dataset, aug_dataset, config, device)
+        else:
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model, dataset, config, device)
         
         # Extract metrics
         test_metrics = [
@@ -122,7 +134,10 @@ for hidden_ch, n_layers, lr in param_combinations:
 
 # Convert results to DataFrame for analysis
 results_df = pd.DataFrame(results_data)
-final_results_csv = f'results/gcn_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
+if args.aug:
+    final_results_csv = f'results_aug/gcn_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
+else:
+    final_results_csv = f'results/gcn_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
 
 if not results_df.empty:
     # Find parameters with best test_logAUC

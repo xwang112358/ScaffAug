@@ -12,47 +12,44 @@ from welqrate.utils.rank_prediction import rank_prediction
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import AdamW
 import yaml
-from torch_geometric.loader import DataLoader
+from torch_geometric.data import Data
+from torch_geometric.data import Dataset
 
-def get_train_loss(model, loader, aug_loader, optimizer, scheduler, device, loss_fn, aug_weight=0.3):
-    """
-    Train with weighted losses where aug_weight controls augmentation importance
-    aug_weight: float between 0 and 1 (default 0.3) - weight for augmentation loss
-    """
+def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
+    
     model.train()
     loss_list = []
-    aug_loss_list = []
 
-    # Combined training on original and augmented datasets
-    for (batch, aug_batch) in zip(loader, aug_loader):
-        optimizer.zero_grad()
-        
-        # Forward pass and loss computation on original data
+    for i, batch in enumerate(tqdm(loader, miniters=100)):
         batch.to(device)
+        # assert batch.edge_index.max() < batch.x.size(0), f"Edge index {batch.edge_index.max()} exceeds number of nodes"
         y_pred = model(batch)
-        orig_loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-        loss_list.append(orig_loss.item())
-
-        # Forward pass and loss computation on augmented data
-        aug_batch.to(device)
-        aug_pred = model(aug_batch)
-        aug_loss = loss_fn(aug_pred.view(-1), aug_batch.y.view(-1).float())
-        aug_loss_list.append(aug_loss.item())
-
-        # Combine losses and perform single backward pass
-        total_loss = (1 - aug_weight) * orig_loss + aug_weight * aug_loss
-        total_loss.backward()
+        
+        loss= loss_fn(y_pred.view(-1), batch.y.view(-1).float())
+            
+        loss_list.append(loss.item())
+        optimizer.zero_grad()
+        loss.backward()
         optimizer.step()
         scheduler.step()
 
-    avg_loss = np.mean(loss_list)
-    avg_aug_loss = np.mean(aug_loss_list)
-    return avg_loss, avg_aug_loss
+    loss = np.mean(loss_list)
+    return loss
 
 
-def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_weight=0.3):
-    # train params: batch_size, num_epochs, weight_decay, peark_lr, ...
-    # split_scheme --> dataset --> loaders 
+class CombinedDataset(Dataset):
+    def __init__(self, data_list):
+        super().__init__()
+        self.data_list = data_list
+        
+    def len(self):
+        return len(self.data_list)
+    
+    def get(self, idx):
+        return self.data_list[idx]
+
+def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
+
     # load train info
     batch_size = int(config['TRAIN']['batch_size'])
     num_epochs = int(config['TRAIN']['num_epochs'])
@@ -65,16 +62,21 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_wei
     loss_fn = BCEWithLogitsLoss()
     
     # load dataset info
-    dataset_name = dataset.name
-    root = dataset.root
-    mol_repr = dataset.mol_repr
-    
+    dataset_name = orig_dataset.name
+
+    print(aug_dataset[0])
     # create loader
-    split_dict = dataset.get_idx_split(split_scheme)
-    train_loader = get_train_loader(dataset[split_dict['train']], batch_size, num_workers, seed)
-    aug_train_loader = DataLoader(aug_dataset, batch_size=batch_size)
-    valid_loader = get_valid_loader(dataset[split_dict['valid']], batch_size, num_workers, seed)
-    test_loader = get_test_loader(dataset[split_dict['test']], batch_size, num_workers, seed) 
+    split_dict = orig_dataset.get_idx_split(split_scheme)
+    train_list = []
+    for graph in tqdm(orig_dataset, desc="Processing original dataset"):
+        train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
+    train_list.extend(aug_dataset)
+
+    # train_dataset = CombinedDataset(train_list)
+    # create train, valid, test loaders
+    train_loader = get_train_loader(train_list, batch_size, num_workers, seed)
+    valid_loader = get_valid_loader(orig_dataset[split_dict['valid']], batch_size, num_workers, seed)
+    test_loader = get_test_loader(orig_dataset[split_dict['test']], batch_size, num_workers, seed) 
 
     # load model info
     model_name = config['MODEL']['model_name']
@@ -89,11 +91,11 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_wei
     np.random.seed(seed)
     
     # Modified base path initialization with versioning
-    base_path = f'./results/{dataset_name}_aug/{split_scheme}/{model_name}0'
+    base_path = f'./results_aug/{dataset_name}/{split_scheme}/{model_name}0'
     version = 0
     while os.path.exists(base_path):
         version += 1
-        base_path = f'./results/{dataset_name}_aug/{split_scheme}/{model_name}{version}'
+        base_path = f'./results_aug/{dataset_name}/{split_scheme}/{model_name}{version}'
     
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
     log_save_path = os.path.join(base_path, f'train.log')
@@ -111,9 +113,8 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_wei
     
     with open(log_save_path, 'w+') as out_file:
         for epoch in range(num_epochs):
-            train_loss, aug_loss = get_train_loss(model, train_loader, aug_train_loader, 
-                                                optimizer, scheduler, device, loss_fn,
-                                                aug_weight=aug_weight)
+            
+            train_loss = get_train_loss(model, train_loader, optimizer, scheduler, device, loss_fn)
             
             lr = get_lr(optimizer)
             
@@ -154,17 +155,18 @@ def train(model, dataset, aug_dataset, config, device, train_eval=False, aug_wei
         raise Exception(f'Model not found at {model_save_path}')
    
     print('Testing ...')
-    test_logAUC, test_EF, test_DCG, test_BEDROC = get_test_metrics(model, test_loader, device, 
+    test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = get_test_metrics(model, test_loader, device, 
                                                                    save_per_molecule_pred=True,
-                                                                   save_path=base_path)
-    print(f'{model_name} at epoch {best_epoch} test logAUC: {test_logAUC:.4f} test EF: {test_EF:.4f} test DCG: {test_DCG:.4f} test BEDROC: {test_BEDROC:.4f}')
+                                                                   save_path=base_path, extra_metrics=True)
+    print(f'{model_name} at epoch {best_epoch} test logAUC: {test_logAUC:.4f} test EF: {test_EF100:.4f} test DCG: {test_DCG100:.4f} test BEDROC: {test_BEDROC:.4f}')
     with open(metrics_save_path, 'w+') as result_file:
-        result_file.write(f'logAUC={test_logAUC}\tEF={test_EF}\tDCG={test_DCG}\tBEDROC={test_BEDROC}\t\n')
+        result_file.write(f'logAUC={test_logAUC}\tEF100={test_EF100}\tDCG100={test_DCG100}\tBEDROC={test_BEDROC}\tEF500={test_EF500}\tEF1000={test_EF1000}\tDCG500={test_DCG500}\tDCG1000={test_DCG1000}\n')
     
-    return test_logAUC, test_EF, test_DCG, test_BEDROC
+    return test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000
     
 
-def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pred=False, save_path=None):
+def get_test_metrics(model, loader, device, type = 'test', 
+                     save_per_molecule_pred=False, save_path=None, extra_metrics=False):
     model.eval()
 
     all_pred_y = []
@@ -174,6 +176,7 @@ def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pre
         batch.to(device)
         pred_y = model(batch).cpu().view(-1).detach().numpy()
         true_y = batch.y.view(-1).cpu().numpy()
+        
         for j, _ in enumerate(pred_y):
             all_pred_y.append(pred_y[j])
             all_true_y.append(true_y[j])
@@ -195,9 +198,18 @@ def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pre
     all_pred_y = np.array(all_pred_y)
     all_true_y = np.array(all_true_y)
     logAUC = calculate_logAUC(all_true_y, all_pred_y)
-    EF = cal_EF(all_true_y, all_pred_y, 100)
-    DCG = cal_DCG(all_true_y, all_pred_y, 100)
+    EF100 = cal_EF(all_true_y, all_pred_y, 100)
+    DCG100 = cal_DCG(all_true_y, all_pred_y, 100)
     BEDROC = cal_BEDROC_score(all_true_y, all_pred_y)
-    return logAUC, EF, DCG, BEDROC
+
+    if extra_metrics:
+        EF500 = cal_EF(all_true_y, all_pred_y, 500)
+        EF1000 = cal_EF(all_true_y, all_pred_y, 1000)
+        DCG500 = cal_DCG(all_true_y, all_pred_y, 500)
+        DCG1000 = cal_DCG(all_true_y, all_pred_y, 1000)
+        return logAUC, EF100, DCG100, BEDROC, EF500, EF1000, DCG500, DCG1000
+    else:
+        return logAUC, EF100, DCG100, BEDROC
+
 
 

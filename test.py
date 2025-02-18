@@ -3,6 +3,7 @@ from welqrate.dataset import WelQrateDataset
 from welqrate.models.gnn2d.GCN import GCN_Model 
 # from welqrate.self_train import train as train_pseudo_label
 from welqrate.train_pseudo_label import train as train_pseudo_label
+from welqrate.train_aug import train as train_aug
 from welqrate.loader import get_train_loader, get_self_train_loader
 import argparse
 import yaml
@@ -20,7 +21,7 @@ split_scheme = 'random_cv1'
 with open('./configs/scaffaug.yaml') as file:
     base_config = yaml.safe_load(file)
 
-base_config['TRAIN']['num_epochs'] = 150
+base_config['TRAIN']['num_epochs'] = 100
 base_config['GENERAL']['seed'] = 1
 base_config['AUGMENTATION']['confidence_threshold'] = 0.8
 
@@ -29,7 +30,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # ----------------- Load Data -----------------
 original_dataset = WelQrateDataset(dataset_name=dataset_name, root='./welqrate_datasets', mol_repr='2dmol')
-augmented_dataset = torch.load(f'./augment_pyg_datasets/{dataset_name}_{split_scheme}_0.1_generated_pyg_graphs.pt')
+augmented_dataset = torch.load(f'./augment_pyg_graphs_labels/{dataset_name}_{split_scheme}_0.1_augment_pyg_graphs_labels.pt')
+
 
 
 model = GCN_Model(
@@ -39,7 +41,7 @@ model = GCN_Model(
 ).to(device)
 
 
-train_pseudo_label(
+train_aug(
     model, original_dataset, augmented_dataset, base_config, device
 )
 

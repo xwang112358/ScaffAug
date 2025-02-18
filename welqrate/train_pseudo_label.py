@@ -69,6 +69,7 @@ def get_train_loss(model,
                    aug_weight=1.0, 
                    confidence_threshold=0.8, 
                    current_epoch=0,
+                   pseudo_label_freq=3,
                    save_path=None):
     """Modified training loop with pseudo labeling and combined loss"""
     model.train()
@@ -80,8 +81,8 @@ def get_train_loss(model,
         get_train_loss.cached_pseudo_labels = None
         get_train_loss.cached_confident_mask = None
 
-    # Generate pseudo labels for augmented data every 3 epochs
-    if current_epoch % 3 == 0:
+    # Generate pseudo labels based on configured frequency
+    if current_epoch % pseudo_label_freq == 0:
         pseudo_labels, confident_mask, pseudo_label_statistics = get_pseudo_labels(model, aug_loader, device, confidence_threshold)
         # Cache the generated pseudo labels
         get_train_loss.cached_pseudo_labels = pseudo_labels
@@ -152,6 +153,7 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
     split_scheme = config['DATA']['split_scheme']
     aug_weight = float(config['AUGMENTATION']['aug_weight'])
     confidence_threshold = float(config['AUGMENTATION']['confidence_threshold'])
+    pseudo_label_freq = int(config['AUGMENTATION']['pseudo_label_freq'])
     loss_fn = BCEWithLogitsLoss()
     
     # load dataset info
@@ -172,9 +174,11 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
     scheduler = get_scheduler(optimizer, config, train_loader)
     
     print('\n' + '=' * 10 + f"Training {model} on {dataset_name}'s {split_scheme} split" '\n' + '=' * 10 )
-    torch.manual_seed(seed)
+    
     random.seed(seed)
     np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     
     # Modified base path initialization with versioning
     base_path = f'./scaffaug_results/{dataset_name}_pseudo_label/{split_scheme}/{model_name}0'
@@ -203,6 +207,7 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
                                                 aug_weight=aug_weight,
                                                 confidence_threshold=confidence_threshold,
                                                 current_epoch=epoch,
+                                                pseudo_label_freq=pseudo_label_freq,
                                                 save_path=base_path)
             
             lr = get_lr(optimizer)
@@ -260,38 +265,3 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
     return test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000
     
 
-# def get_test_metrics(model, loader, device, type = 'test', save_per_molecule_pred=False, save_path=None):
-#     model.eval()
-
-#     all_pred_y = []
-#     all_true_y = []
-
-#     for i, batch in enumerate(tqdm(loader)):
-#         batch.to(device)
-#         pred_y = model(batch).cpu().view(-1).detach().numpy()
-#         true_y = batch.y.view(-1).cpu().numpy()
-#         for j, _ in enumerate(pred_y):
-#             all_pred_y.append(pred_y[j])
-#             all_true_y.append(true_y[j])
-    
-#     if save_per_molecule_pred and save_path is not None:
-#         filename = os.path.join(save_path, f'per_molecule_pred_of_{type}_set.txt')
-#         with open(filename, 'w') as out_file:
-#             for k, _ in enumerate(all_pred_y):
-#                 out_file.write(f'{all_pred_y[k]}\ty={all_true_y[k]}\n')
-        
-#         # rank prediction
-#         with open(filename, 'r') as f:
-#             data = [(float(line.split('\t')[0]), line.split('\t')[1] ) for line in f.readlines()]
-#         ranked_data = sorted(data, key=lambda x: x[0], reverse=True)
-#         with open(os.path.join(save_path, f'ranked_mol_score_{type}.txt'), 'w') as f:
-#             for i, (score, label) in enumerate(ranked_data):
-#                 f.write(f"{i}\t{score}\t{label}")
-
-#     all_pred_y = np.array(all_pred_y)
-#     all_true_y = np.array(all_true_y)
-#     logAUC = calculate_logAUC(all_true_y, all_pred_y)
-#     EF = cal_EF(all_true_y, all_pred_y, 100)
-#     DCG = cal_DCG(all_true_y, all_pred_y, 100)
-#     BEDROC = cal_BEDROC_score(all_true_y, all_pred_y)
-#     return logAUC, EF, DCG, BEDROC

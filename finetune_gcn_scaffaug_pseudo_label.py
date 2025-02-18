@@ -22,7 +22,8 @@ hyperparams = {
     'hidden_channels': [32, 64, 128],
     'num_layers': [2, 3, 4],
     'peak_lr': [1e-2, 1e-3, 1e-4],
-    'confidence_threshold': [0.7, 0.8]
+    'confidence_threshold': [0.7, 0.8],
+    'pseudo_label_freq': [3]
 }
 
 # Load base config
@@ -43,7 +44,8 @@ param_combinations = list(itertools.product(
     hyperparams['hidden_channels'],
     hyperparams['num_layers'],
     hyperparams['peak_lr'],
-    hyperparams['confidence_threshold']
+    hyperparams['confidence_threshold'],
+    hyperparams['pseudo_label_freq']
 ))
 
 
@@ -52,14 +54,14 @@ csv_file = f'scaffaug_results/scaffaug_st_gcn_finetuning_{args.dataset}_{args.sp
 with open(csv_file, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
-        'hidden_channels', 'num_layers', 'peak_lr', 'confidence_threshold',
+        'hidden_channels', 'num_layers', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq',
         'test_logAUC', 'test_EF', 'test_DCG', 'test_BEDROC'
     ])
 
 best_params_file = f'scaffaug_results/best_parameters_{args.dataset}_{args.split}_{timestamp}.txt'
 
 # Run training for each combination
-for hidden_ch, n_layers, lr, confidence_threshold in param_combinations:
+for hidden_ch, n_layers, lr, confidence_threshold, pseudo_label_freq in param_combinations:
     
     # Update config
     try:
@@ -68,6 +70,7 @@ for hidden_ch, n_layers, lr, confidence_threshold in param_combinations:
         config['MODEL']['num_layers'] = n_layers
         config['TRAIN']['peak_lr'] = lr
         config['AUGMENTATION']['confidence_threshold'] = confidence_threshold
+        config['AUGMENTATION']['pseudo_label_freq'] = pseudo_label_freq
         config['DATA']['split_scheme'] = args.split
 
         # Initialize model with current params
@@ -82,7 +85,7 @@ for hidden_ch, n_layers, lr, confidence_threshold in param_combinations:
         print(f"Number of layers: {n_layers}")
         print(f"Peak learning rate: {lr}")
         print(f"Confidence threshold: {confidence_threshold}")
-        
+        print(f"Pseudo label frequency: {pseudo_label_freq}")
         # Train model and get metrics
         test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_pseudo_label(
             model, original_dataset, augmented_dataset, config, device
@@ -97,27 +100,28 @@ for hidden_ch, n_layers, lr, confidence_threshold in param_combinations:
 
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([hidden_ch, n_layers, lr, confidence_threshold] + test_metrics)
+            writer.writerow([hidden_ch, n_layers, lr, confidence_threshold, pseudo_label_freq] + test_metrics)
         
         results_data.append({
             'hidden_channels': hidden_ch,
             'num_layers': n_layers,
             'peak_lr': lr,
             'confidence_threshold': confidence_threshold,
+            'pseudo_label_freq': pseudo_label_freq,
             'test_logAUC': test_logAUC,
             'test_EF': test_EF100,
             'test_DCG': test_DCG100,
             'test_BEDROC': test_BEDROC
         })
     except Exception as e:
-        print(f"Error occurred with parameters: {hidden_ch}, {n_layers}, {lr}, {confidence_threshold}")
+        print(f"Error occurred with parameters: {hidden_ch}, {n_layers}, {lr}, {confidence_threshold}, {pseudo_label_freq}")
         print(f"Error message: {str(e)}")
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([hidden_ch, n_layers, lr, confidence_threshold] + ['ERROR'] * 8)
+            writer.writerow([hidden_ch, n_layers, lr, confidence_threshold, pseudo_label_freq] + ['ERROR'] * 8)
 
 results_df = pd.DataFrame(results_data)
-final_results_csv = f'scaffaug_results/scaffaug_st_gcn_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+final_results_csv = f'scaffaug_results/scaffaug_st_gcn_final_{args.dataset}_{args.split}_{timestamp}.csv'
 
 if not results_df.empty:
     best_params = results_df.loc[results_df['test_logAUC'].idxmax()]
@@ -126,6 +130,7 @@ if not results_df.empty:
     print(f"Number of layers: {best_params['num_layers']}")
     print(f"Peak learning rate: {best_params['peak_lr']}")
     print(f"Confidence threshold: {best_params['confidence_threshold']}")
+    print(f"Pseudo label frequency: {best_params['pseudo_label_freq']}")
     print(f"Best test logAUC: {best_params['test_logAUC']:.4f}")
 
     seeds = [1, 2, 3]
@@ -167,6 +172,7 @@ if not results_df.empty:
                         'num_layers',
                         'peak_lr',
                         'confidence_threshold',
+                        'pseudo_label_freq',
                         'test_logAUC',
                         'test_EF100',
                         'test_DCG100',
@@ -182,6 +188,7 @@ if not results_df.empty:
                     best_params['num_layers'],
                     best_params['peak_lr'],
                     best_params['confidence_threshold'],
+                    best_params['pseudo_label_freq'],
                     test_logAUC,
                     test_EF100,
                     test_DCG100,

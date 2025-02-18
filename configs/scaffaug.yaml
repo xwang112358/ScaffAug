@@ -15,5 +15,6 @@ TRAIN:
 AUGMENTATION:
   confidence_threshold: 0.7
   aug_weight: 1.0
+  pseudo_label_freq: 3
 MODEL:
   model_name: gcn
