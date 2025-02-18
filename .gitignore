@@ -6,3 +6,4 @@ augment_pyg_datasets
 scaffaug_results
 augment_datasets
 augment_pyg_graphs_labels
+results_aug
