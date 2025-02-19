@@ -2,6 +2,7 @@ from welqrate.dataset import WelQrateDataset
 from welqrate.models.gnn2d.GAT import GAT_Model 
 import torch
 from welqrate.train import train
+from welqrate.train_aug import train as train_aug
 import yaml
 import itertools
 import copy
@@ -14,6 +15,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
 parser.add_argument('--split', type=str, default='random_cv1', required=True)
+parser.add_argument('--aug', action='store_true')
 args = parser.parse_args()
 
 # Define hyperparameter search space for GAT
@@ -40,6 +42,7 @@ dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets',
 
 # Create results directory
 os.makedirs('results', exist_ok=True)
+os.makedirs('results_aug', exist_ok=True)
 
 # Initialize results DataFrame
 results_data = []
@@ -58,7 +61,10 @@ split_scheme = args.split
 
 # Create CSV file with headers
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-csv_file = f'results/gat_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+if args.aug:
+    csv_file = f'results_aug/gat_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+else:
+    csv_file = f'results/gat_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
 with open(csv_file, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
@@ -93,7 +99,11 @@ for hidden_ch, n_layers, lr, n_heads in param_combinations:
         print(f"Peak learning rate: {lr}")
 
         # Train model and get metrics
-        test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model, dataset, config, device)
+        if args.aug:
+            aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model, dataset, aug_dataset, config, device)
+        else:
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model, dataset, config, device)
         
         # Extract metrics
         test_metrics = [
@@ -131,7 +141,10 @@ for hidden_ch, n_layers, lr, n_heads in param_combinations:
 
 # Convert results to DataFrame for analysis
 results_df = pd.DataFrame(results_data)
-final_results_csv = f'results/gat_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
+if args.aug:
+    final_results_csv = f'results_aug/gat_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
+else:
+    final_results_csv = f'results/gat_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
 
 if not results_df.empty:
     # Find parameters with best test_logAUC
@@ -161,7 +174,11 @@ if not results_df.empty:
             ).to(device)
 
             # Train model and get metrics
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model, dataset, config, device)
+            if args.aug:
+                aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
+                test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model, dataset, aug_dataset, config, device)
+            else:
+                test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model, dataset, config, device)
             
             seed_results.append({
                 'seed': seed,
@@ -226,3 +243,4 @@ if not results_df.empty:
         print(f"Mean test EF1000: {seed_df['test_EF1000'].mean():.4f} ± {seed_df['test_EF1000'].std():.4f}")
         print(f"Mean test DCG500: {seed_df['test_DCG500'].mean():.4f} ± {seed_df['test_DCG500'].std():.4f}")
         print(f"Mean test DCG1000: {seed_df['test_DCG1000'].mean():.4f} ± {seed_df['test_DCG1000'].std():.4f}")
+
