@@ -2,6 +2,7 @@ from welqrate.dataset import WelQrateDataset
 from welqrate.models.gnn2d.GIN import GIN_Model
 import torch
 from welqrate.train import train
+from welqrate.train_aug import train as train_aug
 import yaml
 import itertools
 import copy
@@ -10,12 +11,12 @@ import pandas as pd
 import csv
 from datetime import datetime
 import argparse
-from welqrate.train_aug import train_aug
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
 parser.add_argument('--split', type=str, default='random_cv1', required=True)
 parser.add_argument('--aug', action='store_true')
+parser.add_argument('--valid', action='store_true')
 args = parser.parse_args()
 
 # Define hyperparameter search space for GIN
@@ -33,9 +34,19 @@ with open('./configs/gin.yaml') as file:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets', mol_repr='2dmol')
 
-# Create results directory
-os.makedirs('results', exist_ok=True)
-os.makedirs('results_aug', exist_ok=True)
+# Create results directory and CSV file
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+if args.aug:
+    results_dir = 'results_aug'
+    csv_file = f'results_aug/gin_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+elif args.valid:
+    results_dir = 'results_valid_aug'
+    csv_file = f'results_valid_aug/gin_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+else:
+    results_dir = 'results'
+    csv_file = f'results/gin_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+
+os.makedirs(results_dir, exist_ok=True)
 
 # Initialize results DataFrame
 results_data = []
@@ -51,12 +62,7 @@ param_combinations = list(itertools.product(
 dataset_name = args.dataset
 split_scheme = args.split
 
-# Create CSV file with headers
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-if args.aug:
-    csv_file = f'results_aug/gin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
-else:
-    csv_file = f'results/gin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+
 with open(csv_file, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
@@ -64,11 +70,6 @@ with open(csv_file, 'w', newline='') as f:
         'test_logAUC', 'test_EF', 'test_DCG', 'test_BEDROC'
     ])
 
-# Also update the best parameters filename
-if args.aug:
-    best_params_file = f'results_aug/best_parameters_{dataset_name}_{split_scheme}_{timestamp}.txt'
-else:
-    best_params_file = f'results/best_parameters_{dataset_name}_{split_scheme}_{timestamp}.txt'
 
 # Run training for each combination
 for hidden_ch, n_layers, lr in param_combinations:
@@ -95,7 +96,10 @@ for hidden_ch, n_layers, lr in param_combinations:
         # Train model and get metrics
         if args.aug:
             aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model, dataset, aug_dataset, config, device)
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model, dataset, aug_dataset, config, device, results_dir=results_dir)
+        elif args.valid:
+            aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model, dataset, aug_dataset, config, device, results_dir=results_dir)
         else:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model, dataset, config, device)
         
@@ -136,9 +140,11 @@ for hidden_ch, n_layers, lr in param_combinations:
 # Convert results to DataFrame for analysis
 results_df = pd.DataFrame(results_data)
 if args.aug:
-    final_results_csv = f'results_aug/gin_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    final_results_csv = f'results_aug/gin_final_{args.dataset}_{args.split}_{timestamp}.csv'
+elif args.valid:
+    final_results_csv = f'results_valid_aug/gin_final_{args.dataset}_{args.split}_{timestamp}.csv'
 else:
-    final_results_csv = f'results/gin_final_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    final_results_csv = f'results/gin_final_{args.dataset}_{args.split}_{timestamp}.csv'
 
 if not results_df.empty:
     # Find parameters with best test_logAUC
@@ -168,7 +174,10 @@ if not results_df.empty:
             # Train model and get metrics
             if args.aug:
                 aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
-                test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model, dataset, aug_dataset, config, device)
+                test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model, dataset, aug_dataset, config, device, results_dir)
+            elif args.valid:
+                aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
+                test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model, dataset, aug_dataset, config, device, results_dir)
             else:
                 test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model, dataset, config, device)
             

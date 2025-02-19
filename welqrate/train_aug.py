@@ -48,7 +48,7 @@ class CombinedDataset(Dataset):
     def get(self, idx):
         return self.data_list[idx]
 
-def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
+def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, results_dir=None):
 
     # load train info
     batch_size = int(config['TRAIN']['batch_size'])
@@ -91,11 +91,11 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False):
     np.random.seed(seed)
     
     # Modified base path initialization with versioning
-    base_path = f'./results_aug/{dataset_name}/{split_scheme}/{model_name}0'
+    base_path = f'./{results_dir}/{dataset_name}/{split_scheme}/{model_name}0'
     version = 0
     while os.path.exists(base_path):
         version += 1
-        base_path = f'./results_aug/{dataset_name}/{split_scheme}/{model_name}{version}'
+        base_path = f'./{results_dir}/{dataset_name}/{split_scheme}/{model_name}{version}'
     
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
     log_save_path = os.path.join(base_path, f'train.log')
