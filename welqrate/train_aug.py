@@ -107,7 +107,7 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, re
 
     
     best_epoch = 0
-    best_valid_logAUC = -1
+    best_valid_bedroc = -1
     early_stopping_counter = 0
     print(f'Training with early stopping limit of {early_stopping_limit} epochs')
     
@@ -132,8 +132,8 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, re
             print(f'valid_logAUC={valid_logAUC:.4f} valid_EF={valid_EF:.4f} valid_DCG={valid_DCG:.4f} valid_BEDROC={valid_BEDROC:.4f}')
             out_file.write(f'Epoch:{epoch}\tlogAUC={valid_logAUC}\tEF={valid_EF}\tDCG={valid_DCG}\tBEDROC={valid_BEDROC}\t\n')  
             
-            if valid_logAUC > best_valid_logAUC: 
-                best_valid_logAUC = valid_logAUC
+            if valid_BEDROC > best_valid_bedroc:
+                best_valid_bedroc = valid_BEDROC
                 best_epoch = epoch
                 torch.save({'model': model.state_dict(),
                             'epoch': epoch}, model_save_path)
@@ -145,7 +145,7 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, re
                 print(f'Early stopping at epoch {epoch}')
                 break
         print(f'Training finished')
-        print(f'Best epoch: {best_epoch} with valid logAUC: {best_valid_logAUC:.4f}')
+        print(f'Best epoch: {best_epoch} with valid BEDROC: {best_valid_bedroc:.4f}')
         
     # testing the model
     if os.path.exists(model_save_path):
