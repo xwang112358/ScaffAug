@@ -84,7 +84,7 @@ def objective(trial):
         if args.aug:
             aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
-                                                                                      dataset=dataset, 
+                                                                                      orig_dataset=dataset, 
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
@@ -92,7 +92,7 @@ def objective(trial):
         elif args.valid:
             aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
-                                                                                      dataset=dataset, 
+                                                                                      orig_dataset=dataset, 
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
@@ -123,7 +123,8 @@ def objective(trial):
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=4, n_jobs=4)  # Adjust n_trials as needed
+study.optimize(objective, n_trials=24, n_jobs=4,
+               timeout=16200, show_progress_bar =True)  # Adjust n_trials as needed
 
 # Get best parameters
 best_params = study.best_params
@@ -249,7 +250,7 @@ if seed_results:
         ]
     }
     summary_df = pd.DataFrame(summary_stats)
-    summary_csv = f'results/summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    summary_csv = f'results/gcn_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
     summary_df.to_csv(summary_csv, index=False)
 
 

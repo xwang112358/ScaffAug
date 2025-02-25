@@ -196,7 +196,7 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False,
                      weight_decay=float(config['TRAIN']['weight_decay']))
     scheduler = get_scheduler(optimizer, config, train_loader)
 
-    best_valid_logAUC = -1
+    best_valid_BEDROC = -1
     early_stopping_counter = 0
     base_path = create_save_path(config, orig_dataset.name, save_path)
 
@@ -223,8 +223,8 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False,
             log_metrics(epoch, train_loss, valid_metrics, log_file, optimizer)
 
             # Early stopping check
-            if valid_metrics[0] > best_valid_logAUC:
-                best_valid_logAUC = valid_metrics[0]
+            if valid_metrics[3] > best_valid_BEDROC:
+                best_valid_BEDROC = valid_metrics[3]
                 torch.save({'model': model.state_dict(), 'epoch': epoch},
                           os.path.join(base_path, 'model.pt'))
                 early_stopping_counter = 0
