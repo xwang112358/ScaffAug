@@ -9,3 +9,4 @@ augment_pyg_graphs_labels
 results_aug
 augment_valid_pyg_graphs_labels
 results_valid_aug
+welqrate/__pycache__
