@@ -144,7 +144,16 @@ seed_results = []
 
 for seed in seeds:
     print(f"\nRunning with seed {seed}")
-    base_config['GENERAL']['seed'] = seed
+    config = copy.deepcopy(base_config)
+    config['GENERAL']['seed'] = seed
+    config['TRAIN']['peak_lr'] = best_params['peak_lr']
+    # split scheme
+    config['DATA']['split_scheme'] = args.split
+    config['MODEL']['hidden_channels'] = best_params['hidden_channels']
+    config['MODEL']['num_layers'] = best_params['num_layers']
+
+    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/gin/seed{seed}'
+    os.makedirs(final_results_dir, exist_ok=True)
     
     try:
         # Initialize model with best params
@@ -157,12 +166,26 @@ for seed in seeds:
         # Train model and get metrics
         if args.aug:
             aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model, dataset, aug_dataset, base_config, device, results_dir=results_dir)
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model=model,
+                                                                                                                              orig_dataset=dataset, 
+                                                                                                                              aug_dataset=aug_dataset,
+                                                                                                                              config=config, 
+                                                                                                                              device=device, 
+                                                                                                                              save_path=final_results_dir)
         elif args.valid:
             aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model, dataset, aug_dataset, base_config, device, results_dir=results_dir)
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model=model,
+                                                                                                                              orig_dataset=dataset, 
+                                                                                                                              aug_dataset=aug_dataset,
+                                                                                                                              config=config, 
+                                                                                                                              device=device, 
+                                                                                                                              save_path=final_results_dir)
         else:
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model, dataset, base_config, device)
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model=model, 
+                                                                                                                          dataset=dataset, 
+                                                                                                                          config=config, 
+                                                                                                                          device=device,
+                                                                                                                          save_path=final_results_dir)
         
         seed_results.append({
             'seed': seed,
