@@ -68,7 +68,7 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, sa
     # create loader
     split_dict = orig_dataset.get_idx_split(split_scheme)
     train_list = []
-    for graph in tqdm(orig_dataset, desc="Processing original dataset"):
+    for graph in tqdm(orig_dataset[split_dict['train']], desc="Processing original dataset"):
         train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
     train_list.extend(aug_dataset)
 
