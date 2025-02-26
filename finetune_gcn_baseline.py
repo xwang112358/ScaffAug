@@ -280,7 +280,7 @@ if seed_results:
         ]
     }
     summary_df = pd.DataFrame(summary_stats)
-    summary_csv = f'results/gcn_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    summary_csv = f'{results_dir}/gcn_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
     summary_df.to_csv(summary_csv, index=False)
 
 
