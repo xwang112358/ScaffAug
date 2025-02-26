@@ -12,7 +12,7 @@ import csv
 from datetime import datetime
 import argparse
 import optuna
-
+import sys
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
 parser.add_argument('--split', type=str, default='random_cv1', required=True)
@@ -59,7 +59,9 @@ def objective(trial):
     hidden_channels = trial.suggest_categorical('hidden_channels', [32, 64, 128])
     num_layers = trial.suggest_int('num_layers', 2, 4)
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
-    
+    trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/gcn/trial{trial.number}"
+    os.makedirs(trial_dir, exist_ok=True)
+
     try:
         # Update config
         config = copy.deepcopy(base_config)
@@ -88,7 +90,7 @@ def objective(trial):
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
-                                                                                      results_dir=results_dir)
+                                                                                      save_path=trial_dir)
         elif args.valid:
             aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
@@ -96,12 +98,13 @@ def objective(trial):
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
-                                                                                      results_dir=results_dir)
+                                                                                      save_path=trial_dir)
         else:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model=model, 
                                                                                   dataset=dataset, 
                                                                                   config=config, 
-                                                                                  device=device)
+                                                                                  device=device,
+                                                                                  save_path=trial_dir)
         
         # Save results to CSV
         with open(csv_file, 'a', newline='') as f:
@@ -119,12 +122,16 @@ def objective(trial):
             writer = csv.writer(f)
             writer.writerow([hidden_channels, num_layers, peak_lr, 
                              float('-inf'), float('-inf'), float('-inf'), float('-inf')])
+        # stop the whole process
+        # sys.exit()
         return float('-inf')  
+        
+    
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize')
 study.optimize(objective, n_trials=24, n_jobs=4,
-               timeout=16200, show_progress_bar =True)  # Adjust n_trials as needed
+               timeout=16200)  # Adjust n_trials as needed
 
 # Get best parameters
 best_params = study.best_params

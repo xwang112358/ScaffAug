@@ -36,7 +36,7 @@ def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
     return loss
 
 
-def train(model, dataset, config, device, train_eval=False):
+def train(model, dataset, config, device, train_eval=False, save_path=None):
 
     # load train info
     batch_size = int(config['TRAIN']['batch_size'])
@@ -70,13 +70,20 @@ def train(model, dataset, config, device, train_eval=False):
     random.seed(seed)
     np.random.seed(seed)
     
-    # Modified base path initialization with versioning
-    base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}0'
-    version = 0
-    while os.path.exists(base_path):
-        version += 1
-        base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}{version}'
+    # Modified base path initialization with versioning to avoid race conditions
+    # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # pid = os.getpid()
+    # base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}_{current_time}_{pid}'
     
+    # # For backward compatibility, also add a version number
+    # version = 0
+    # versioned_path = f'{base_path}_v{version}'
+    # while os.path.exists(versioned_path):
+    #     version += 1
+    #     versioned_path = f'{base_path}_v{version}'
+    
+    # base_path = versioned_path
+    base_path = save_path
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
     log_save_path = os.path.join(base_path, f'train.log')
     metrics_save_path = os.path.join(base_path, f'test_results.txt')

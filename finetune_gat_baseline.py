@@ -60,6 +60,8 @@ def objective(trial):
     num_layers = trial.suggest_int('num_layers', 2, 4)
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     heads = trial.suggest_categorical('heads', [4, 8])
+    trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/gat/trial{trial.number}"
+    os.makedirs(trial_dir, exist_ok=True)
     
     try:
         # Update config
@@ -88,24 +90,25 @@ def objective(trial):
         if args.aug:
             aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
-                                                                                      dataset=dataset, 
+                                                                                      orig_dataset=dataset, 
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
-                                                                                      results_dir=results_dir)
+                                                                                      save_path=trial_dir)
         elif args.valid:
             aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
-                                                                                      dataset=dataset, 
+                                                                                      orig_dataset=dataset, 
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
-                                                                                      results_dir=results_dir)
+                                                                                      save_path=trial_dir)
         else:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model=model, 
                                                                                   dataset=dataset, 
                                                                                   config=config, 
-                                                                                  device=device)
+                                                                                  device=device,
+                                                                                  save_path=trial_dir)
         
         # Save results to CSV
         with open(csv_file, 'a', newline='') as f:
