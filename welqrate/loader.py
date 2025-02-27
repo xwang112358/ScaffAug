@@ -4,7 +4,8 @@ import torch
 
 # need to change for regression task
 def get_train_loader(train_dataset, batch_size, num_workers, seed):
-    num_train_active = len(torch.nonzero(torch.tensor([data.y for data in train_dataset])))
+    # More efficient counting of active/inactive samples
+    num_train_active = sum(1 for data in train_dataset if data.y == 1)
     num_train_inactive = len(train_dataset) - num_train_active
     print(f'training # of molecules: {len(train_dataset)}, actives: {num_train_active}')
 
@@ -35,8 +36,9 @@ def get_train_loader(train_dataset, batch_size, num_workers, seed):
 
 
 def get_test_loader(test_dataset, batch_size, num_workers, seed):
-    num_test_active = len(torch.nonzero(torch.tensor([data.y for data in test_dataset])))
-    print(f'test # of molecules: {len(test_dataset)}, actives: {num_test_active}')
+    # More efficient counting of active/inactive samples
+    # num_test_active = sum(1 for data in test_dataset if data.y == 1)
+    # print(f'test # of molecules: {len(test_dataset)}, actives: {num_test_active}')
 
     test_loader = DataLoader(
         test_dataset,
@@ -49,8 +51,9 @@ def get_test_loader(test_dataset, batch_size, num_workers, seed):
     return test_loader
 
 def get_valid_loader(valid_dataset, batch_size, num_workers, seed):
-    num_valid_active = len(torch.nonzero(torch.tensor([data.y for data in valid_dataset])))
-    print(f'validation # of molecules: {len(valid_dataset)}, actives: {num_valid_active}')
+    # More efficient counting of active/inactive samples
+    # num_valid_active = sum(1 for data in valid_dataset if data.y == 1)
+    # print(f'validation # of molecules: {len(valid_dataset)}, actives: {num_valid_active}')
 
     valid_loader = DataLoader(
         valid_dataset,
@@ -67,9 +70,8 @@ def get_self_train_loader(combined_dataset, batch_size, num_workers, seed):
     orig_dataset = combined_dataset.orig_dataset
     aug_dataset = combined_dataset.aug_dataset
     
-    # Calculate statistics for original dataset
-    orig_y = torch.tensor([data.y for data in orig_dataset])
-    num_orig_active = len(torch.nonzero(orig_y))
+    # Calculate statistics for original dataset - more efficiently
+    num_orig_active = sum(1 for data in orig_dataset if data.y == 1)
     num_orig_inactive = len(orig_dataset) - num_orig_active
     
     print("\nOriginal Dataset Statistics:")

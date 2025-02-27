@@ -48,10 +48,10 @@ class CombinedDataset(Dataset):
     def get(self, idx):
         return self.data_list[idx]
 
-def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, save_path=None, processed_train_list=None):
+def train_aug(model, config, device, train_eval=False, save_path=None, 
+          train_loader=None, valid_loader=None, test_loader=None, dataset_name=None):
 
     # load train info
-    batch_size = int(config['TRAIN']['batch_size'])
     num_epochs = int(config['TRAIN']['num_epochs'])
     num_workers = int(config['GENERAL']['num_workers'])
     seed = int(config['GENERAL']['seed'])
@@ -61,28 +61,13 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, sa
     
     loss_fn = BCEWithLogitsLoss()
     
-    # load dataset info
-    dataset_name = orig_dataset.name
+    # Use provided dataset_name or extract from config
+    if dataset_name is None:
+        dataset_name = config['DATA']['dataset_name']
 
-    print(aug_dataset[0])
-    # create loader
-    split_dict = orig_dataset.get_idx_split(split_scheme)
-    
-    # Use pre-processed train list if provided, otherwise create it
-    if processed_train_list is None:
-        train_list = []
-        for graph in tqdm(orig_dataset[split_dict['train']], desc="Processing original dataset"):
-            train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
-        train_list.extend(aug_dataset)
-    else:
-        train_list = processed_train_list
-        print("Using pre-processed training data")
-
-
-    # create train, valid, test loaders
-    train_loader = get_train_loader(train_list, batch_size, num_workers, seed)
-    valid_loader = get_valid_loader(orig_dataset[split_dict['valid']], batch_size, num_workers, seed)
-    test_loader = get_test_loader(orig_dataset[split_dict['test']], batch_size, num_workers, seed) 
+    # Ensure all loaders are provided
+    if train_loader is None or valid_loader is None or test_loader is None:
+        raise ValueError("All data loaders (train, valid, test) must be provided")
 
     # load model info
     model_name = config['MODEL']['model_name']
@@ -92,16 +77,9 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, sa
     scheduler = get_scheduler(optimizer, config, train_loader)
     
     print('\n' + '=' * 10 + f"Training {model} on {dataset_name}'s {split_scheme} split" '\n' + '=' * 10 )
-    torch.manual_seed(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    
-    # # Modified base path initialization with versioning
-    # base_path = f'./{results_dir}/{dataset_name}/{split_scheme}/{model_name}0'
-    # version = 0
-    # while os.path.exists(base_path):
-    #     version += 1
-    #     base_path = f'./{results_dir}/{dataset_name}/{split_scheme}/{model_name}{version}'
+    torch.manual_seed(int(config['GENERAL']['seed']))
+    random.seed(int(config['GENERAL']['seed']))
+    np.random.seed(int(config['GENERAL']['seed']))
     
     base_path = save_path
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
