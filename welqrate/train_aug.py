@@ -48,7 +48,7 @@ class CombinedDataset(Dataset):
     def get(self, idx):
         return self.data_list[idx]
 
-def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, save_path=None):
+def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, save_path=None, processed_train_list=None):
 
     # load train info
     batch_size = int(config['TRAIN']['batch_size'])
@@ -67,12 +67,18 @@ def train(model, orig_dataset, aug_dataset, config, device, train_eval=False, sa
     print(aug_dataset[0])
     # create loader
     split_dict = orig_dataset.get_idx_split(split_scheme)
-    train_list = []
-    for graph in tqdm(orig_dataset[split_dict['train']], desc="Processing original dataset"):
-        train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
-    train_list.extend(aug_dataset)
+    
+    # Use pre-processed train list if provided, otherwise create it
+    if processed_train_list is None:
+        train_list = []
+        for graph in tqdm(orig_dataset[split_dict['train']], desc="Processing original dataset"):
+            train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
+        train_list.extend(aug_dataset)
+    else:
+        train_list = processed_train_list
+        print("Using pre-processed training data")
 
-    # train_dataset = CombinedDataset(train_list)
+
     # create train, valid, test loaders
     train_loader = get_train_loader(train_list, batch_size, num_workers, seed)
     valid_loader = get_valid_loader(orig_dataset[split_dict['valid']], batch_size, num_workers, seed)

@@ -12,6 +12,8 @@ import csv
 from datetime import datetime
 import argparse
 import optuna
+from torch_geometric.data import Data
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
@@ -37,9 +39,21 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 if args.aug:
     results_dir = 'results_aug'
     csv_file = f'results_aug/gin_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+    aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
+    processed_train_list = []
+    split_dict = dataset.get_idx_split(split_scheme)
+    for graph in tqdm(dataset[split_dict['train']], desc="Processing original dataset"):
+        processed_train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
+    processed_train_list.extend(aug_dataset)
 elif args.valid:
     results_dir = 'results_valid_aug'
     csv_file = f'results_valid_aug/gin_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+    aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
+    processed_train_list = []
+    split_dict = dataset.get_idx_split(split_scheme)
+    for graph in tqdm(dataset[split_dict['train']], desc="Processing original dataset"):
+        processed_train_list.append(Data(x=graph.x, edge_index=graph.edge_index, edge_attr=graph.edge_attr, y=graph.y))
+    processed_train_list.extend(aug_dataset)
 else:
     results_dir = 'results'
     csv_file = f'results/gin_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
@@ -84,27 +98,30 @@ def objective(trial):
         
         # Train model and get metrics
         if args.aug:
-            aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
+            # aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
                                                                                       orig_dataset=dataset, 
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
-                                                                                      save_path=trial_dir)
+                                                                                      save_path=trial_dir,
+                                                                                      processed_train_list=processed_train_list)
         elif args.valid:
-            aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
+            # aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(model=model, 
                                                                                       orig_dataset=dataset, 
                                                                                       aug_dataset=aug_dataset, 
                                                                                       config=config, 
                                                                                       device=device, 
-                                                                                      save_path=trial_dir)
+                                                                                      save_path=trial_dir,
+                                                                                      processed_train_list=processed_train_list)
         else:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(model=model, 
                                                                                   dataset=dataset, 
                                                                                   config=config, 
                                                                                   device=device,
-                                                                                  save_path=trial_dir)
+                                                                                  save_path=trial_dir,
+                                                                                  )
         
         # Save results to CSV
         with open(csv_file, 'a', newline='') as f:
@@ -171,7 +188,8 @@ for seed in seeds:
                                                                                                                               aug_dataset=aug_dataset,
                                                                                                                               config=config, 
                                                                                                                               device=device, 
-                                                                                                                              save_path=final_results_dir)
+                                                                                                                              save_path=final_results_dir,
+                                                                                                                              processed_train_list=processed_train_list)
         elif args.valid:
             aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(model=model,
@@ -179,7 +197,8 @@ for seed in seeds:
                                                                                                                               aug_dataset=aug_dataset,
                                                                                                                               config=config, 
                                                                                                                               device=device, 
-                                                                                                                              save_path=final_results_dir)
+                                                                                                                              save_path=final_results_dir,
+                                                                                                                              processed_train_list=processed_train_list)
         else:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(model=model, 
                                                                                                                           dataset=dataset, 
