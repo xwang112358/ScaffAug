@@ -13,6 +13,8 @@ for dataset_name in datasets:
     print(f"Dataset size: {len(dataset)}")
     print(f"Sample data point: {dataset[0]}")
     
+
+    break
 #     # only keep x, edge_index, edge_attr, y for each data point and save it in a list
 #     start_time = time.time()
 #     data_list = []

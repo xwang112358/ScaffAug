@@ -39,14 +39,20 @@ class PolynomialDecayLR(_LRScheduler):
 def get_scheduler(optimizer, config, dataset):
 
     num_train_batches = math.ceil(len(dataset)/int(config['TRAIN']['batch_size']))
-
     tot_iterations = (num_train_batches) * int(config['TRAIN']['num_epochs'])
     print(f'tot_iterations={tot_iterations}')
+    
+    # Calculate warmup iterations as a percentage of total iterations
+    warmup_percentage = float(config['TRAIN']['warmup_percentage'])  # Default 10% if not specified
+    warmup_iterations = max(1, int(warmup_percentage * tot_iterations))
+
+        
+    print(f'warmup_iterations={warmup_iterations}')
 
     scheduler = {
         'scheduler': PolynomialDecayLR(
             optimizer,
-            warmup_iterations=int(config['TRAIN']['warmup_iterations']),
+            warmup_iterations=warmup_iterations,
             tot_iterations=tot_iterations,
             lr=float(config['TRAIN']['peak_lr']),
             end_lr=float(config['TRAIN']['end_lr']),

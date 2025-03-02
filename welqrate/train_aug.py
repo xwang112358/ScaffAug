@@ -37,16 +37,6 @@ def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
     return loss
 
 
-class CombinedDataset(Dataset):
-    def __init__(self, data_list):
-        super().__init__()
-        self.data_list = data_list
-        
-    def len(self):
-        return len(self.data_list)
-    
-    def get(self, idx):
-        return self.data_list[idx]
 
 def train_aug(model, config, device, train_eval=False, save_path=None, 
           train_loader=None, valid_loader=None, test_loader=None, dataset_name=None):

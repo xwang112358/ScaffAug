@@ -178,7 +178,6 @@ class WelQrateDataset(InMemoryDataset):
         RDLogger.DisableLog('rdApp.*')
         
         data_list = []
-        # invalid_id_list = []
         mol_id = 0
         
         for file_name, label in [(f'{self.name}_actives{self.file_type}', 1),
@@ -195,13 +194,14 @@ class WelQrateDataset(InMemoryDataset):
                 for i, mol in tqdm(enumerate(inchi_list), total = len(inchi_list)):
                     pyg_data = inchi2graph(mol)
                     
-                    pyg_data.y = torch.tensor([label], dtype=torch.int) 
-
-                    pyg_data.pubchem_cid = torch.tensor([int(cid_list[i])], dtype=torch.int)
-                    pyg_data.mol_id = torch.tensor([mol_id], dtype=torch.int)  # index of the molecule in the dataset
-                    pyg_data.smiles = smiles_list[i]
-                    pyg_data.mol_id = torch.tensor([mol_id], dtype=torch.int)
-                    data_list.append(pyg_data)
+                    # Keep only essential attributes
+                    simplified_data = Data(
+                        x=pyg_data.x,
+                        edge_index=pyg_data.edge_index,
+                        edge_attr=pyg_data.edge_attr,
+                        y=torch.tensor([label], dtype=torch.int)
+                    )
+                    data_list.append(simplified_data)
                     mol_id += 1
                     
             elif self.mol_repr == '3dmol':
@@ -209,39 +209,25 @@ class WelQrateDataset(InMemoryDataset):
                 df = pd.read_csv(f'{source_path[:-4]}.csv')
                 smiles_dict = df.set_index('CID')['SMILES'].to_dict()
                 inchi_dict = df.set_index('CID')['InChI'].to_dict()
-                # if self.task_type == 'regression':  
-                #     activity_dict = df.set_index('CID')['activity_value'].to_dict()
 
                 mol_conformer_list, cid_list = sdffile2mol_conformer(source_path)
-                # get the smiles/inchi from the csv file with CID
                 
                 for i, (mol, conformer) in tqdm(enumerate(mol_conformer_list), total=len(mol_conformer_list)):
                     pyg_data = mol_conformer2graph3d(mol, conformer)
-                    # if pyg_data.valid is False: # need to implement valid
-                    #     invalid_id_list.append([mol_id, mol])
-                    #     print('skip 1 invalid mol')
-                    #     continue
-                    # need to extract the smiles/inchi from the csv file with CID
-                    # directly converting mol to smiles/inchi encounters some bugs
-                    pyg_data.pubchem_cid = torch.tensor([int(cid_list[i])], dtype=torch.int)
-                    pyg_data.y = torch.tensor([label], dtype=torch.int)
-                    pyg_data.smiles = smiles_dict[int(cid_list[i])]
-                    pyg_data.inchi = inchi_dict[int(cid_list[i])]
-     
-                    # if self.task_type == 'regression':
-                    #     pyg_data.activity_value = torch.tensor([activity_dict[int(cid_list[i])]], dtype=torch.float)
-                    pyg_data.mol_id = torch.tensor([mol_id], dtype=torch.int)
-                    data_list.append(pyg_data)
+                    
+                    # Keep only essential attributes
+                    simplified_data = Data(
+                        x=pyg_data.x,
+                        edge_index=pyg_data.edge_index,
+                        y=torch.tensor([label], dtype=torch.int)
+                    )
+                    
+                    # Add pos for 3D molecules as it's essential for 3D representation
+                    if hasattr(pyg_data, 'pos'):
+                        simplified_data.pos = pyg_data.pos
+                    
+                    data_list.append(simplified_data)
                     mol_id += 1
-        
-        # save invalid_id_list
-        # pd.DataFrame(invalid_id_list).to_csv(
-        #     os.path.join(self.processed_dir, f'{self.name}-{self.mol_repr}-invalid_id.csv')
-        #     , header=None, index=None)
-
-        # if len(invalid_id_list) > 0:
-        #     print(f'number of invalid molecules: {len(invalid_id_list)}, check the invalid_id_list.csv')
-        #     raise ValueError('invalid molecules found')
         
         data, slices = self.collate(data_list)
         processed_file_path = os.path.join(self.processed_dir, f'processed_{self.mol_repr}_{self.name}.pt')
