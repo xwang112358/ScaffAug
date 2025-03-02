@@ -3,11 +3,16 @@ from torch.utils.data import WeightedRandomSampler
 import torch
 
 # need to change for regression task
-def get_train_loader(train_dataset, batch_size, num_workers, seed):
+def get_train_loader(train_dataset, batch_size, num_workers, seed, precomputed_stats=None):
     # More efficient counting of active/inactive samples
-    num_train_active = sum(1 for data in train_dataset if data.y == 1)
-    num_train_inactive = len(train_dataset) - num_train_active
-    print(f'training # of molecules: {len(train_dataset)}, actives: {num_train_active}')
+    if precomputed_stats is None:
+        num_train_active = sum(1 for data in train_dataset if data.y == 1)
+        num_train_inactive = len(train_dataset) - num_train_active
+        print(f'training # of molecules: {len(train_dataset)}, actives: {num_train_active}')
+    else:
+        num_train_active = precomputed_stats['num_train_active']
+        num_train_inactive = precomputed_stats['num_train_inactive']
+        print(f'training # of molecules: {len(train_dataset)}, actives: {num_train_active}')
 
     train_sampler_weight = torch.tensor([(1. / num_train_inactive)
                                          if data.y == 0

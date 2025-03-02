@@ -16,7 +16,13 @@ from torch_geometric.loader import DataLoader
 from torch.nn import functional as F
 from welqrate.utils.test import get_test_metrics
 
-def get_train_loss(model, all_loader, optimizer, scheduler, device, loss_fn, aug_loader=None):
+def get_train_loss(model, 
+                   all_loader, 
+                   optimizer, 
+                   scheduler, 
+                   device, 
+                   loss_fn, 
+                   aug_loader=None):
     
     model.train()
     loss_list = []
@@ -53,7 +59,7 @@ def get_train_loss(model, all_loader, optimizer, scheduler, device, loss_fn, aug
 def get_pseudo_labels(model, 
                       aug_loader, 
                       device, 
-                      confidence_threshold=0.8):
+                      confidence_threshold):
     """Generate pseudo labels for augmented data with confidence thresholding"""
 
     model.eval()
@@ -94,89 +100,6 @@ def get_pseudo_labels(model,
             
     return pseudo_labels, confident_mask, statistics
 
-# def get_pseudo_label_train_loss(model, 
-#                    loader,
-#                    aug_loader, 
-#                    optimizer, 
-#                    scheduler, 
-#                    device, 
-#                    loss_fn, 
-#                    aug_weight=1.0, 
-#                    confidence_threshold=0.8, 
-#                    current_epoch=0,
-#                    pseudo_label_freq=3,
-#                    save_path=None):
-#     """Modified training loop with pseudo labeling and combined loss"""
-    
-#     model.train()
-#     loss_list = []
-#     aug_loss_list = []
-    
-#     # Store pseudo labels as static variables if they don't exist
-#     if not hasattr(get_train_loss, 'cached_pseudo_labels'):
-#         get_train_loss.cached_pseudo_labels = None
-#         get_train_loss.cached_confident_mask = None
-
-#     # Generate pseudo labels based on configured frequency
-#     if current_epoch % pseudo_label_freq == 0:
-#         pseudo_labels, confident_mask, pseudo_label_statistics = get_pseudo_labels(model, aug_loader, device, confidence_threshold)
-#         # Cache the generated pseudo labels
-#         get_train_loss.cached_pseudo_labels = pseudo_labels
-#         get_train_loss.cached_confident_mask = confident_mask
-        
-#         if save_path is not None:
-#             with open(os.path.join(save_path, f'pseudo_label_statistics.txt'), 'a') as f:
-#                 f.write(f'Epoch: {current_epoch}\t')
-#                 f.write(f'{pseudo_label_statistics["total_confident"]}\t{pseudo_label_statistics["confident_ones"]}\t{pseudo_label_statistics["confident_zeros"]}\n')
-
-#     # Combine training on original and augmented data
-#     for (batch, aug_batch), i in zip(zip(loader, aug_loader), range(len(loader))):
-#         optimizer.zero_grad()
-        
-#         # Forward pass and loss computation on original data
-#         batch.to(device)
-#         y_pred = model(batch)
-#         orig_loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-#         loss_list.append(orig_loss.item())
-
-#         # Apply augmentation loss if we have cached pseudo labels
-#         if get_train_loss.cached_pseudo_labels is not None:
-#             aug_batch.to(device)
-#             batch_size = len(aug_batch.batch.unique())
-#             start_idx = i * batch_size
-#             end_idx = start_idx + batch_size
-            
-#             batch_confident = get_train_loss.cached_confident_mask[start_idx:end_idx]
-            
-#             if batch_confident.any():
-#                 aug_pred = model(aug_batch)
-#                 batch_pseudo_labels = get_train_loss.cached_pseudo_labels[start_idx:end_idx]
-                
-#                 aug_pred = aug_pred.view(-1).to(device)
-#                 batch_pseudo_labels = batch_pseudo_labels.view(-1).to(device)
-#                 batch_confident = batch_confident.to(device)
-                
-#                 aug_loss = loss_fn(
-#                     aug_pred[batch_confident.squeeze()].view(-1),
-#                     batch_pseudo_labels[batch_confident.squeeze()].view(-1)
-#                 )
-#                 aug_loss_list.append(aug_loss.item())
-#             else:
-#                 aug_loss = torch.tensor(0.0, device=device)
-
-#             total_loss = orig_loss + aug_weight * aug_loss#(1 - aug_weight) * orig_loss + aug_weight * aug_loss
-#         else:
-#             total_loss = orig_loss
-
-#         total_loss.backward()
-#         optimizer.step()
-#         scheduler.step()
-
-#     avg_loss = np.mean(loss_list)
-#     avg_aug_loss = np.mean(aug_loss_list) if aug_loss_list else 0
-#     return avg_loss, avg_aug_loss
-
-
 def train_pseudo_label(model, 
                        config, 
                        device, 
@@ -201,11 +124,17 @@ def train_pseudo_label(model,
     confidence_threshold = float(config['AUGMENTATION']['confidence_threshold'])
     pseudo_label_freq = int(config['AUGMENTATION']['pseudo_label_freq'])
     model_name = config['MODEL']['model_name']
+
     loss_fn = BCEWithLogitsLoss()
-    
-    
+    num_orig_train_active = sum(1 for data in orig_train_data_list if data.y == 1)
+    num_orig_train_inactive = len(orig_train_data_list) - num_orig_train_active
+    precomputed_orig_train_stats = {
+        'num_train_active': num_orig_train_active,
+        'num_train_inactive': num_orig_train_inactive
+    }
+
     # Create loaders if not provided
-    orig_train_loader = get_train_loader(orig_train_data_list, batch_size, num_workers, seed)
+    orig_train_loader = get_train_loader(orig_train_data_list, batch_size, num_workers, seed, precomputed_orig_train_stats)
     aug_train_loader = DataLoader(aug_data_list, batch_size=batch_size)
     valid_loader = get_valid_loader(orig_train_data_list, batch_size, num_workers, seed)
     test_loader = get_test_loader(orig_train_data_list, batch_size, num_workers, seed)
@@ -242,7 +171,6 @@ def train_pseudo_label(model,
     
     with open(log_save_path, 'w+') as out_file:
         for epoch in range(num_epochs):
-
             if epoch < start_epoch:
                 train_loss = get_train_loss(model=model, 
                                             all_loader=orig_train_loader, 
@@ -251,8 +179,8 @@ def train_pseudo_label(model,
                                             device=device, 
                                             loss_fn=loss_fn)
                 lr = get_lr(optimizer)
-                print(f'current_epoch={epoch} original train_loss={train_loss:.4f} lr={lr}')
-                out_file.write(f'Epoch:{epoch}\t original_loss={train_loss}\tlr={lr}\t\n')
+                print(f'current_epoch={epoch} train_loss={train_loss:.4f} lr={lr}')
+                out_file.write(f'Epoch:{epoch}\t loss={train_loss}\tlr={lr}\t\n')
 
             elif epoch >=start_epoch and epoch % pseudo_label_freq == 0:
                 # get pseudo labels
@@ -263,11 +191,15 @@ def train_pseudo_label(model,
                 num_confident = pseudo_label_statistics['total_confident']
                 num_actives = pseudo_label_statistics['confident_actives']
                 num_inactives = pseudo_label_statistics['confident_inactives']
+
+                aug_train_stats = {
+                    'num_train_active': num_actives + num_orig_train_active,
+                    'num_train_inactive': num_inactives + num_orig_train_inactive
+                }
                 
                 # Save pseudo-label statistics to a file
                 stats_save_path = os.path.join(base_path, 'pseudo_label_statistics.txt')
                 with open(stats_save_path, 'a+') as stats_file:
-                    # Create header if file is empty
                     stats_file.seek(0)
                     if not stats_file.read(1):
                         stats_file.write("Epoch\tTotal_Confident\tConfident_Actives\tConfident_Inactives\n")
@@ -284,7 +216,8 @@ def train_pseudo_label(model,
                 augmented_train_loader = get_train_loader(train_dataset = augmented_train_data_list, 
                                                           batch_size=batch_size,
                                                           num_workers=num_workers,
-                                                          seed=seed)
+                                                          seed=seed,
+                                                          precomputed_stats=aug_train_stats)
                 
                 train_loss, aug_train_loss = get_train_loss(model=model, 
                                             all_loader=augmented_train_loader, 
@@ -294,8 +227,8 @@ def train_pseudo_label(model,
                                             loss_fn=loss_fn,
                                             aug_loader=aug_data_loader)
                 lr = get_lr(optimizer)
-                print(f'current_epoch={epoch} original train_loss={train_loss:.4f} aug_loss={aug_train_loss:.4f} lr={lr}')
-                out_file.write(f'Epoch:{epoch}\t original_loss={train_loss}\taug_loss={aug_train_loss}\tlr={lr}\t\n')
+                print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} aug_loss={aug_train_loss:.4f} lr={lr}')
+                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\taug_loss={aug_train_loss}\tlr={lr}\t\n')
             else:
                 # Check if augmented_train_loader is None and use orig_train_loader as fallback
                 if augmented_train_loader is None:
@@ -309,14 +242,13 @@ def train_pseudo_label(model,
                                             loss_fn=loss_fn,
                                             aug_loader=aug_data_loader)
                 lr = get_lr(optimizer)
-                print(f'current_epoch={epoch} original train_loss={train_loss:.4f} aug_loss={aug_train_loss:.4f} lr={lr}')
-                out_file.write(f'Epoch:{epoch}\t original_loss={train_loss}\taug_loss={aug_train_loss}\tlr={lr}\t\n')
+                print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} aug_loss={aug_train_loss:.4f} lr={lr}')
+                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\taug_loss={aug_train_loss}\tlr={lr}\t\n')
                     
             
-                
-            valid_logAUC, valid_EF100, valid_DCG100, valid_BEDROC = get_test_metrics(model, 
-                                                                                     valid_loader, 
-                                                                                     device, 
+            valid_logAUC, valid_EF100, valid_DCG100, valid_BEDROC = get_test_metrics(model=model, 
+                                                                                     loader=valid_loader, 
+                                                                                     device=device, 
                                                                                      type='valid', 
                                                                                      save_per_molecule_pred=True, 
                                                                                      save_path=base_path)  
@@ -347,10 +279,12 @@ def train_pseudo_label(model,
         raise Exception(f'Model not found at {model_save_path}')
    
     print('Testing ...')
-    test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = get_test_metrics(model, test_loader, device, 
-                                                                   save_per_molecule_pred=True,
-                                                                   save_path=base_path,
-                                                                   extra_metrics=True)
+    test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = get_test_metrics(model=model, 
+                                                                                                                             loader=test_loader, 
+                                                                                                                             device=device, 
+                                                                                                                             save_per_molecule_pred=True,
+                                                                                                                             save_path=base_path,
+                                                                                                                             extra_metrics=True)
     print(f'{model_name} at epoch {best_epoch} test logAUC: {test_logAUC:.4f} test EF: {test_EF100:.4f} test DCG: {test_DCG100:.4f} test BEDROC: {test_BEDROC:.4f}')
     with open(metrics_save_path, 'w+') as result_file:
         result_file.write(f'logAUC={test_logAUC}\tEF100={test_EF100}\tDCG100={test_DCG100}\tBEDROC={test_BEDROC}\tEF500={test_EF500}\tEF1000={test_EF1000}\tDCG500={test_DCG500}\tDCG1000={test_DCG1000}\t\n')

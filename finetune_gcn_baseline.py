@@ -167,7 +167,7 @@ def objective(trial):
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=24, n_jobs=4,
+study.optimize(objective, n_trials=4, n_jobs=4,
                timeout=16200)  # Adjust n_trials as needed
 
 # Get best parameters

@@ -45,7 +45,7 @@ def get_scheduler(optimizer, config, dataset):
     # Calculate warmup iterations as a percentage of total iterations
     warmup_percentage = float(config['TRAIN']['warmup_percentage'])  # Default 10% if not specified
     warmup_iterations = max(1, int(warmup_percentage * tot_iterations))
-
+    print(f'warmup_iterations={warmup_iterations}')
         
     print(f'warmup_iterations={warmup_iterations}')
 

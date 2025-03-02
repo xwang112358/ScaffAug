@@ -70,19 +70,6 @@ def train(model, dataset, config, device, train_eval=False, save_path=None):
     random.seed(seed)
     np.random.seed(seed)
     
-    # Modified base path initialization with versioning to avoid race conditions
-    # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # pid = os.getpid()
-    # base_path = f'./results/{dataset_name}/{split_scheme}/{model_name}_{current_time}_{pid}'
-    
-    # # For backward compatibility, also add a version number
-    # version = 0
-    # versioned_path = f'{base_path}_v{version}'
-    # while os.path.exists(versioned_path):
-    #     version += 1
-    #     versioned_path = f'{base_path}_v{version}'
-    
-    # base_path = versioned_path
     base_path = save_path
     model_save_path = os.path.join(base_path, f'{model_name}.pt')
     log_save_path = os.path.join(base_path, f'train.log')

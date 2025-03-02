@@ -31,8 +31,6 @@ class WelQrateDataset(InMemoryDataset):
         if self.task_type == 'regression':
             raise ValueError('Regression task is not supported yet')
 
-        # if self.name not in ['AID2689', 'AID488997', 'AID435008'] and self.task_type == 'regression':
-        #     raise ValueError(f'{self.name} is not a regression dataset')
         
         super(WelQrateDataset, self).__init__(self.root)
         
