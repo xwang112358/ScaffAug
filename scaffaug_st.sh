@@ -1,19 +1,19 @@
 echo "Start finetuning GCN with pseudo labels"
 # AID1798
-# echo "AID1798"
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv1 & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv2 & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv3 & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv4 & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv5 
-# wait    
+echo "AID1798"
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv1 & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv2 & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv3 & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv4 & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split random_cv5 
+wait    
 
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed1  & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed2  & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed3  & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed4  & \
-# python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed5  
-# wait
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed1  & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed2  & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed3  & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed4  & \
+python finetune_gcn_pseudo_label.py --dataset AID1798 --split scaffold_seed5  
+wait
 
 # AID463087
 echo "AID463087"

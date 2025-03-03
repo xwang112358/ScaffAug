@@ -27,7 +27,7 @@ def get_train_loss(model,
     model.train()
     loss_list = []
 
-    for i, batch in enumerate(tqdm(all_loader, miniters=100)):
+    for i, batch in enumerate(all_loader):
         batch.to(device)
         # assert batch.edge_index.max() < batch.x.size(0), f"Edge index {batch.edge_index.max()} exceeds number of nodes"
         y_pred = model(batch)
@@ -43,8 +43,9 @@ def get_train_loss(model,
     loss = np.mean(loss_list)
 
     if aug_loader is not None:
+        model.eval()
         aug_loss_list = []
-        for i, batch in enumerate(tqdm(aug_loader, miniters=100)):
+        for i, batch in enumerate(aug_loader):
             batch.to(device)
             y_pred = model(batch)
             loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
@@ -136,12 +137,10 @@ def train_pseudo_label(model,
     # Create loaders if not provided
     orig_train_loader = get_train_loader(orig_train_data_list, batch_size, num_workers, seed, precomputed_orig_train_stats)
     aug_train_loader = DataLoader(aug_data_list, batch_size=batch_size)
-    valid_loader = get_valid_loader(orig_train_data_list, batch_size, num_workers, seed)
-    test_loader = get_test_loader(orig_train_data_list, batch_size, num_workers, seed)
 
     # load optimizer and scheduler
     optimizer = AdamW(model.parameters(), weight_decay=weight_decay)
-    scheduler = get_scheduler(optimizer, config, orig_train_loader)
+    scheduler = get_scheduler(optimizer, config, orig_train_data_list)
     
     print('\n' + '=' * 10 + f"Training {model} on {dataset_name}'s {split_scheme} split" '\n' + '=' * 10 )
     
@@ -170,7 +169,7 @@ def train_pseudo_label(model,
     augmented_train_loader = None
     
     with open(log_save_path, 'w+') as out_file:
-        for epoch in range(num_epochs):
+        for epoch in tqdm(range(num_epochs), desc='Training'):
             if epoch < start_epoch:
                 train_loss = get_train_loss(model=model, 
                                             all_loader=orig_train_loader, 
@@ -211,6 +210,7 @@ def train_pseudo_label(model,
                 for i in range(len(confident_aug_data)):
                     # Make sure to detach and move to CPU before assignment
                     confident_aug_data[i].y = pseudo_labels[confident_indices[i]].detach().cpu()
+                aug_data_loader = DataLoader(confident_aug_data, batch_size=batch_size)
 
                 augmented_train_data_list = orig_train_data_list + confident_aug_data
                 augmented_train_loader = get_train_loader(train_dataset = augmented_train_data_list, 

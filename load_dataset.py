@@ -4,6 +4,7 @@ import time
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from welqrate.loader import get_train_loader
 datasets = ['AID1798', 'AID463087', 'AID488997', 'AID2689', 'AID485290']
 
 
@@ -12,6 +13,9 @@ for dataset_name in datasets:
     dataset = WelQrateDataset(dataset_name=dataset_name, root='./welqrate_datasets', mol_repr='2dmol')
     print(f"Dataset size: {len(dataset)}")
     print(f"Sample data point: {dataset[0]}")
+
+    train_loader = get_train_loader(dataset, batch_size=128, num_workers=0, seed=1)
+    print(len(train_loader))
     
 
     break

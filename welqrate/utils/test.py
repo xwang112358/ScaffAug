@@ -17,7 +17,7 @@ def get_test_metrics(model, loader, device, type = 'test',
     all_pred_y = []
     all_true_y = []
 
-    for i, batch in enumerate(tqdm(loader)):
+    for i, batch in enumerate(loader):
         batch.to(device)
         pred_y = model(batch).cpu().view(-1).detach().numpy()
         true_y = batch.y.view(-1).cpu().numpy()

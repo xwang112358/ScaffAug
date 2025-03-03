@@ -66,8 +66,8 @@ def objective(trial):
     num_layers = trial.suggest_int('num_layers', 2, 4)
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     confidence_threshold = trial.suggest_float('confidence_threshold', 0.7, 0.9)
-    pseudo_label_freq = trial.suggest_categorical('pseudo_label_freq', [3, 5, 10])
-    start_epoch = trial.suggest_int('start_epoch', 25, 50)
+    pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10)
+    start_epoch = trial.suggest_int('start_epoch', 15, 25)
 
     trial_dir = f"{results_dir}/{args.dataset}/{args.split}/gcn/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
@@ -134,7 +134,7 @@ def objective(trial):
         return float('-inf')
 
 # Create study object and optimize
-study = optuna.create_study(direction='maximize')
+study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler(seed=seed))
 study.optimize(objective, n_trials=36, n_jobs=4, timeout=16200)  # Adjust n_trials as needed
 
 # Get best parameters
