@@ -21,8 +21,7 @@ def get_train_loss(model,
                    optimizer, 
                    scheduler, 
                    device, 
-                   loss_fn, 
-                   aug_loader=None):
+                   loss_fn):
     
     model.train()
     loss_list = []
@@ -41,19 +40,6 @@ def get_train_loss(model,
         scheduler.step()
 
     loss = np.mean(loss_list)
-
-    if aug_loader is not None:
-        model.eval()
-        aug_loss_list = []
-        for i, batch in enumerate(aug_loader):
-            batch.to(device)
-            y_pred = model(batch)
-            loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
-            aug_loss_list.append(loss.item())
-        aug_loss = np.mean(aug_loss_list)
-        all_loss = loss
-
-        return all_loss, aug_loss
 
     return loss
 
@@ -163,7 +149,7 @@ def train_pseudo_label(model,
     early_stopping_counter = 0
     print(f'Training with early stopping limit of {early_stopping_limit} epochs')
 
-    aug_data_loader = DataLoader(aug_data_list, batch_size=batch_size)
+    # aug_data_loader = DataLoader(aug_data_list, batch_size=batch_size)
     
     # Initialize augmented_train_loader with original data to avoid None error
     augmented_train_loader = None
@@ -210,7 +196,7 @@ def train_pseudo_label(model,
                 for i in range(len(confident_aug_data)):
                     # Make sure to detach and move to CPU before assignment
                     confident_aug_data[i].y = pseudo_labels[confident_indices[i]].detach().cpu()
-                aug_data_loader = DataLoader(confident_aug_data, batch_size=batch_size)
+                # confident_aug_data_loader = DataLoader(confident_aug_data, batch_size=batch_size)
 
                 augmented_train_data_list = orig_train_data_list + confident_aug_data
                 augmented_train_loader = get_train_loader(train_dataset = augmented_train_data_list, 
@@ -219,31 +205,31 @@ def train_pseudo_label(model,
                                                           seed=seed,
                                                           precomputed_stats=aug_train_stats)
                 
-                train_loss, aug_train_loss = get_train_loss(model=model, 
+                train_loss = get_train_loss(model=model, 
                                             all_loader=augmented_train_loader, 
                                             optimizer=optimizer, 
                                             scheduler=scheduler, 
                                             device=device, 
                                             loss_fn=loss_fn,
-                                            aug_loader=aug_data_loader)
+                                            )
                 lr = get_lr(optimizer)
-                print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} aug_loss={aug_train_loss:.4f} lr={lr}')
-                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\taug_loss={aug_train_loss}\tlr={lr}\t\n')
+                print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} lr={lr}')
+                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\tlr={lr}\t\n')
             else:
                 # Check if augmented_train_loader is None and use orig_train_loader as fallback
                 if augmented_train_loader is None:
                     augmented_train_loader = orig_train_loader
                     
-                train_loss, aug_train_loss = get_train_loss(model=model, 
+                train_loss = get_train_loss(model=model, 
                                             all_loader=augmented_train_loader, 
                                             optimizer=optimizer, 
                                             scheduler=scheduler, 
                                             device=device, 
                                             loss_fn=loss_fn,
-                                            aug_loader=aug_data_loader)
+                                            )
                 lr = get_lr(optimizer)
-                print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} aug_loss={aug_train_loss:.4f} lr={lr}')
-                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\taug_loss={aug_train_loss}\tlr={lr}\t\n')
+                print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} lr={lr}')
+                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\tlr={lr}\t\n')
                     
             
             valid_logAUC, valid_EF100, valid_DCG100, valid_BEDROC = get_test_metrics(model=model, 
