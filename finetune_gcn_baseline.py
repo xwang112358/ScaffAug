@@ -109,6 +109,7 @@ def objective(trial):
         config['MODEL']['num_layers'] = num_layers
         config['TRAIN']['peak_lr'] = peak_lr
         config['DATA']['split_scheme'] = args.split
+        config['DATA']['dataset_name'] = args.dataset
         
         # Initialize model with current params
         model = GCN_Model(
@@ -193,6 +194,8 @@ for seed in seeds:
     config['DATA']['split_scheme'] = args.split
     config['MODEL']['hidden_channels'] = best_params['hidden_channels']
     config['MODEL']['num_layers'] = best_params['num_layers']
+    config['DATA']['dataset_name'] = args.dataset
+    config['DATA']['split_scheme'] = args.split 
 
     final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/gcn/seed{seed}'
     os.makedirs(final_results_dir, exist_ok=True)
@@ -218,7 +221,7 @@ for seed in seeds:
         if args.aug or args.valid:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(
                 model=model,
-                config=base_config, 
+                config=config, 
                 device=device, 
                 save_path=final_results_dir,
                 train_loader=train_loader,
@@ -229,7 +232,7 @@ for seed in seeds:
         else:
             test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(
                 model=model, 
-                config=base_config, 
+                config=config, 
                 device=device,
                 save_path=final_results_dir,
                 dataset=dataset  # Original train function expects dataset, not loaders

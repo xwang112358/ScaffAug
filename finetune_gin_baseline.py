@@ -107,7 +107,7 @@ def objective(trial):
         config['MODEL']['num_layers'] = num_layers
         config['TRAIN']['peak_lr'] = peak_lr
         config['DATA']['split_scheme'] = args.split
-        
+        config['DATA']['dataset_name'] = args.dataset
         # Initialize model with current params
         model = GIN_Model(
             in_channels=12,
@@ -186,6 +186,8 @@ for seed in seeds:
     config['DATA']['split_scheme'] = args.split
     config['MODEL']['hidden_channels'] = best_params['hidden_channels']
     config['MODEL']['num_layers'] = best_params['num_layers']
+    config['DATA']['dataset_name'] = args.dataset
+    config['DATA']['split_scheme'] = args.split
 
     final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/gin/seed{seed}'
     os.makedirs(final_results_dir, exist_ok=True)

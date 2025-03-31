@@ -66,8 +66,8 @@ def objective(trial):
     num_layers = trial.suggest_int('num_layers', 2, 4)
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     confidence_threshold = trial.suggest_float('confidence_threshold', 0.7, 0.9)
-    pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10)
-    start_epoch = trial.suggest_int('start_epoch', 15, 25)
+    pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10) # 3,10
+    start_epoch = trial.suggest_int('start_epoch', 15, 25) # 15,25
 
     trial_dir = f"{results_dir}/{args.dataset}/{args.split}/gin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
@@ -123,6 +123,13 @@ def objective(trial):
     except Exception as e:
         print(f"Error occurred in trial {trial.number}")
         print(f"Error message: {str(e)}")
+
+        import traceback
+        print(f"Error occurred in trial {trial.number}")
+        print(f"Error message: {str(e)}")
+        print("Full traceback:")
+        traceback.print_exc()
+
         # Save error info to CSV
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
@@ -135,7 +142,7 @@ def objective(trial):
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler(seed=seed))
-study.optimize(objective, n_trials=36, n_jobs=4, timeout=16200)  # Adjust n_trials as needed
+study.optimize(objective, n_trials=16, n_jobs=4)  # Adjust n_trials as needed
 
 # Get best parameters
 best_params = study.best_params

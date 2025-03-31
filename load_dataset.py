@@ -14,11 +14,11 @@ for dataset_name in datasets:
     print(f"Dataset size: {len(dataset)}")
     print(f"Sample data point: {dataset[0]}")
 
-    train_loader = get_train_loader(dataset, batch_size=128, num_workers=0, seed=1)
-    print(len(train_loader))
+    # train_loader = get_train_loader(dataset, batch_size=128, num_workers=0, seed=1)
+    # print(len(train_loader))
     
 
-    break
+    # break
 #     # only keep x, edge_index, edge_attr, y for each data point and save it in a list
 #     start_time = time.time()
 #     data_list = []
