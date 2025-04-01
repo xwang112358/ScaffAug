@@ -65,7 +65,7 @@ def objective(trial):
     hidden_channels = trial.suggest_categorical('emb_dim', [32, 64, 128])
     num_layers = trial.suggest_int('num_layer', 2, 4)
     drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
-    graph_pooling = trial.suggest_categorical('graph_pooling', ["sum", "mean", "max"])
+    graph_pooling = "sum"  # Fixed to 'sum' instead of tuning
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     confidence_threshold = trial.suggest_float('confidence_threshold', 0.7, 0.9)
     pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10)
@@ -82,7 +82,7 @@ def objective(trial):
         config['MODEL']['emb_dim'] = hidden_channels
         config['MODEL']['num_layer'] = num_layers
         config['MODEL']['drop_ratio'] = drop_ratio
-        config['MODEL']['graph_pooling'] = graph_pooling
+        config['MODEL']['graph_pooling'] = graph_pooling  # Always 'sum'
         config['TRAIN']['peak_lr'] = peak_lr
         config['AUGMENTATION']['confidence_threshold'] = confidence_threshold
         config['AUGMENTATION']['pseudo_label_freq'] = pseudo_label_freq
@@ -100,7 +100,7 @@ def objective(trial):
         print(f"Embedding dimension: {hidden_channels}")
         print(f"Number of layers: {num_layers}")
         print(f"Dropout ratio: {drop_ratio}")
-        print(f"Graph pooling: {graph_pooling}")
+        print(f"Graph pooling: {graph_pooling}")  # Will always print 'sum'
         print(f"Peak learning rate: {peak_lr}")
         print(f"Confidence threshold: {confidence_threshold}")
         print(f"Pseudo label frequency: {pseudo_label_freq}")
@@ -161,7 +161,7 @@ print("\nBest parameters found:")
 print(f"Embedding dimension: {best_params['emb_dim']}")
 print(f"Number of layers: {best_params['num_layer']}")
 print(f"Dropout ratio: {best_params['drop_ratio']}")
-print(f"Graph pooling: {best_params['graph_pooling']}")
+print(f"Graph pooling: sum")  # Fixed to 'sum'
 print(f"Peak learning rate: {best_params['peak_lr']}")
 print(f"Confidence threshold: {best_params['confidence_threshold']}")
 print(f"Pseudo label frequency: {best_params['pseudo_label_freq']}")
@@ -179,7 +179,7 @@ for seed in seeds:
     config['MODEL']['emb_dim'] = best_params['emb_dim']
     config['MODEL']['num_layer'] = best_params['num_layer']
     config['MODEL']['drop_ratio'] = best_params['drop_ratio']
-    config['MODEL']['graph_pooling'] = best_params['graph_pooling']
+    config['MODEL']['graph_pooling'] = "sum"  # Fixed to 'sum'
     config['TRAIN']['peak_lr'] = best_params['peak_lr']
     config['AUGMENTATION']['confidence_threshold'] = best_params['confidence_threshold']
     config['AUGMENTATION']['pseudo_label_freq'] = best_params['pseudo_label_freq']
@@ -194,7 +194,7 @@ for seed in seeds:
             num_layer=int(best_params['num_layer']),
             emb_dim=int(best_params['emb_dim']),
             drop_ratio=float(best_params['drop_ratio']),
-            graph_pooling=best_params['graph_pooling']
+            graph_pooling="sum"  # Fixed to 'sum'
         ).to(device)
 
         test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_pseudo_label(

@@ -97,7 +97,7 @@ def objective(trial):
     emb_dim = trial.suggest_categorical('emb_dim', [128, 256, 300])
     num_layer = trial.suggest_int('num_layer', 3, 5)
     drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
-    graph_pooling = trial.suggest_categorical('graph_pooling', ["sum", "mean", "max"])
+    graph_pooling = "sum"  # Fixed to 'sum' instead of tuning
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/gin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
@@ -108,7 +108,7 @@ def objective(trial):
         config['MODEL']['emb_dim'] = emb_dim
         config['MODEL']['num_layer'] = num_layer
         config['MODEL']['drop_ratio'] = drop_ratio
-        config['MODEL']['graph_pooling'] = graph_pooling
+        config['MODEL']['graph_pooling'] = graph_pooling  # Always 'sum'
         config['TRAIN']['peak_lr'] = peak_lr
         config['DATA']['split_scheme'] = args.split
         config['DATA']['dataset_name'] = args.dataset
@@ -118,14 +118,14 @@ def objective(trial):
             num_layer=num_layer,
             emb_dim=emb_dim,
             drop_ratio=drop_ratio,
-            graph_pooling=graph_pooling
+            graph_pooling=graph_pooling  # Always 'sum'
         ).to(device)
         
         print(f"\nTrial {trial.number}")
         print(f"Embedding dimension: {emb_dim}")
         print(f"Number of layers: {num_layer}")
         print(f"Dropout ratio: {drop_ratio}")
-        print(f"Graph pooling: {graph_pooling}")
+        print(f"Graph pooling: {graph_pooling}")  # Will always print 'sum'
         print(f"Peak learning rate: {peak_lr}")
         
         # Train model and get metrics
@@ -185,7 +185,7 @@ print("\nBest parameters found:")
 print(f"Embedding dimension: {best_params['emb_dim']}")
 print(f"Number of layers: {best_params['num_layer']}")
 print(f"Dropout ratio: {best_params['drop_ratio']}")
-print(f"Graph pooling: {best_params['graph_pooling']}")
+print(f"Graph pooling: sum")  # Fixed to 'sum'
 print(f"Peak learning rate: {best_params['peak_lr']}")
 print(f"Best test BEDROC: {best_value:.4f}")
 
@@ -202,7 +202,7 @@ for seed in seeds:
     config['MODEL']['emb_dim'] = best_params['emb_dim']
     config['MODEL']['num_layer'] = best_params['num_layer']
     config['MODEL']['drop_ratio'] = best_params['drop_ratio']
-    config['MODEL']['graph_pooling'] = best_params['graph_pooling']
+    config['MODEL']['graph_pooling'] = "sum"  # Fixed to 'sum'
     config['DATA']['dataset_name'] = args.dataset
     config['DATA']['split_scheme'] = args.split
 
@@ -224,7 +224,7 @@ for seed in seeds:
             num_layer=int(best_params['num_layer']),
             emb_dim=int(best_params['emb_dim']),
             drop_ratio=float(best_params['drop_ratio']),
-            graph_pooling=best_params['graph_pooling']
+            graph_pooling="sum"  # Fixed to 'sum'
         ).to(device)
 
         # Train model and get metrics

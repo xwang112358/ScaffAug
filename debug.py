@@ -9,7 +9,7 @@ import argparse
 # Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', help='Dataset name')
-parser.add_argument('--split', type=str, default='random_cv1', help='Split scheme')
+parser.add_argument('--split', type=str, default='random_cv2', help='Split scheme')
 args = parser.parse_args()
 
 # Load base config

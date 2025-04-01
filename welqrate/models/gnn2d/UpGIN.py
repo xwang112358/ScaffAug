@@ -21,8 +21,15 @@ class GINConv(MessagePassing):
            torch.nn.Linear(2*emb_dim, emb_dim)
        )
        self.eps = torch.nn.Parameter(torch.Tensor([0]))
+       
+       # Add an edge embedding layer to transform edge features
+       self.edge_embedding = torch.nn.Linear(4, emb_dim)  # Assuming edge_attr has 4 features
 
    def forward(self, x, edge_index, edge_attr):
+       # Transform edge attributes if they exist
+       if edge_attr is not None:
+           edge_attr = self.edge_embedding(edge_attr)
+       
        out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_attr))
        return out
 
@@ -47,6 +54,9 @@ class GIN(torch.nn.Module):
        
        if self.num_layer < 2:
            raise ValueError("Number of GNN layers must be greater than 1.")
+       
+       # Node embedding layer - transform node features to emb_dim
+       self.node_embedding = torch.nn.Linear(12, emb_dim)  # Assuming x has 12 features
        
        # Node embedding layers
        self.convs = torch.nn.ModuleList()
@@ -78,10 +88,11 @@ class GIN(torch.nn.Module):
    def forward(self, batched_data):
        x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
        
-       # Process node features through GIN layers
-       h = x
+       # First embed the node features
+       h = self.node_embedding(x)
        h_list = [h]
        
+       # Process node features through GIN layers
        for layer in range(self.num_layer):
            h = self.convs[layer](h, edge_index, edge_attr)
            h = self.batch_norms[layer](h)

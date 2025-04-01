@@ -63,7 +63,7 @@ def train(model, dataset, config, device, train_eval=False, save_path=None):
 
     # load optimizer and scheduler
     optimizer = AdamW(model.parameters(), weight_decay=weight_decay)
-    scheduler = get_scheduler(optimizer, config, train_loader)
+    scheduler = get_scheduler(optimizer, config, batch_size*len(train_loader))
     
     print('\n' + '=' * 10 + f"Training {model} on {dataset_name}'s {split_scheme} split" '\n' + '=' * 10 )
     torch.manual_seed(seed)
