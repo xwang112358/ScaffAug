@@ -5,12 +5,12 @@ DATA:
   dataset_name: AID1798
   split_scheme: random_cv1
 TRAIN:
-  num_epochs: 5
+  num_epochs: 100
   batch_size: 128
   warmup_percentage: 0.1
   peak_lr: 1e-3
   end_lr: 1e-4
   weight_decay: 1e-2
-  early_stop: 50
+  early_stop: 30
 MODEL:
-  model_name: gcn
+  model_name: upgin

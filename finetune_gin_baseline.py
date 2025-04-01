@@ -24,7 +24,7 @@ parser.add_argument('--valid', action='store_true')
 args = parser.parse_args()
 
 # Load base config
-with open('./configs/gin.yaml') as file:
+with open('./configs/upgin.yaml') as file:
     base_config = yaml.safe_load(file)
 
 # Setup dataset
@@ -50,7 +50,7 @@ test_loader = get_test_loader(dataset[split_dict['test']], batch_size, num_worke
 
 if args.aug:
     results_dir = 'results_aug'
-    csv_file = f'results_aug/gin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    csv_file = f'results_aug/upgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
     aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
     
     # Process original dataset
@@ -65,7 +65,7 @@ if args.aug:
 elif args.valid:
     aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
     results_dir = 'results_valid_aug'
-    csv_file = f'results_valid_aug/gin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    csv_file = f'results_valid_aug/upgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
     
     # Process original dataset
     train_list = []
@@ -77,7 +77,7 @@ elif args.valid:
     train_loader = get_train_loader(train_list, batch_size, num_workers, seed)
 else:
     results_dir = 'results'
-    csv_file = f'results/gin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    csv_file = f'results/upgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
     
     # Create train loader for non-augmented case
     train_loader = get_train_loader(dataset[split_dict['train']], batch_size, num_workers, seed)
@@ -99,7 +99,7 @@ def objective(trial):
     drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
     graph_pooling = "sum"  # Fixed to 'sum' instead of tuning
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
-    trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/gin/trial{trial.number}"
+    trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/upgin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
     
     try:
@@ -146,7 +146,9 @@ def objective(trial):
                 config=config, 
                 device=device,
                 save_path=trial_dir,
-                dataset=dataset  # Original train function expects dataset, not loaders
+                train_loader=train_loader,
+                valid_loader=valid_loader,
+                test_loader=test_loader
             )
         
         # Save results to CSV
@@ -175,7 +177,7 @@ def objective(trial):
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=1, n_jobs=1, timeout=16200)  # Adjust n_trials as needed
+study.optimize(objective, n_trials=16, n_jobs=4, timeout=16200)  # Adjust n_trials as needed
 
 # Get best parameters
 best_params = study.best_params
@@ -185,7 +187,7 @@ print("\nBest parameters found:")
 print(f"Embedding dimension: {best_params['emb_dim']}")
 print(f"Number of layers: {best_params['num_layer']}")
 print(f"Dropout ratio: {best_params['drop_ratio']}")
-print(f"Graph pooling: sum")  # Fixed to 'sum'
+print(f"Graph pooling: sum")  
 print(f"Peak learning rate: {best_params['peak_lr']}")
 print(f"Best test BEDROC: {best_value:.4f}")
 
@@ -206,7 +208,7 @@ for seed in seeds:
     config['DATA']['dataset_name'] = args.dataset
     config['DATA']['split_scheme'] = args.split
 
-    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/gin/seed{seed}'
+    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/upgin/seed{seed}'
     os.makedirs(final_results_dir, exist_ok=True)
     
     # Update only the train_loader with the current seed
@@ -245,7 +247,9 @@ for seed in seeds:
                 config=config, 
                 device=device,
                 save_path=final_results_dir,
-                dataset=dataset  # Original train function expects dataset, not loaders
+                train_loader=train_loader,
+                valid_loader=valid_loader,
+                test_loader=test_loader
             )
         
         seed_results.append({
@@ -340,7 +344,7 @@ if seed_results:
         ]
     }
     summary_df = pd.DataFrame(summary_stats)
-    summary_csv = f'{results_dir}/gin_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    summary_csv = f'{results_dir}/upgin_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
     summary_df.to_csv(summary_csv, index=False)
 
 

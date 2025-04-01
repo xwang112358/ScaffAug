@@ -36,7 +36,7 @@ def get_train_loss(model, loader, optimizer, scheduler, device, loss_fn):
     return loss
 
 
-def train(model, dataset, config, device, train_eval=False, save_path=None):
+def train(model, train_loader, valid_loader, test_loader, config, device, train_eval=False, save_path=None):
 
     # load train info
     batch_size = int(config['TRAIN']['batch_size'])
@@ -50,14 +50,8 @@ def train(model, dataset, config, device, train_eval=False, save_path=None):
     loss_fn = BCEWithLogitsLoss()
     
     # load dataset info
-    dataset_name = dataset.name
+    dataset_name = config['DATA']['dataset_name']
     
-    # create loader
-    split_dict = dataset.get_idx_split(split_scheme)
-    train_loader = get_train_loader(dataset[split_dict['train']], batch_size, num_workers, seed)
-    valid_loader = get_valid_loader(dataset[split_dict['valid']], batch_size, num_workers, seed)
-    test_loader = get_test_loader(dataset[split_dict['test']], batch_size, num_workers, seed) 
-
     # load model info
     model_name = config['MODEL']['model_name']
 

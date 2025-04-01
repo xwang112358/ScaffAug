@@ -43,9 +43,18 @@ class GINConv(MessagePassing):
 
 
 class GIN(torch.nn.Module):
-   def __init__(self, num_layer=5, emb_dim=300, drop_ratio=0.25, graph_pooling="max"):
+   def __init__(self, 
+                num_layer=3, 
+                emb_dim=300, 
+                drop_ratio=0.25, 
+                graph_pooling="max"):
        '''
        Simple GIN model for a single task
+       Input:
+        num_layer (int): number of GNN layers
+        emb_dim (int): node embedding dimensionality
+        drop_ratio (float): dropout ratio
+        graph_pooling (str): graph pooling type
        '''
        super(GIN, self).__init__()
        self.num_layer = num_layer
@@ -55,7 +64,6 @@ class GIN(torch.nn.Module):
        if self.num_layer < 2:
            raise ValueError("Number of GNN layers must be greater than 1.")
        
-       # Node embedding layer - transform node features to emb_dim
        self.node_embedding = torch.nn.Linear(12, emb_dim)  # Assuming x has 12 features
        
        # Node embedding layers
