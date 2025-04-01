@@ -7,7 +7,7 @@ import torch
 from torch_scatter import scatter_add
 from welqrate.utils.rank_prediction import rank_prediction
 from welqrate.utils.evaluation import calculate_logAUC, cal_EF, cal_DCG, cal_BEDROC_score, \
-                       MAE, MSE, RMSE, R2
+                       f1_score
 
 def get_test_metrics(model, loader, device, type = 'test', 
                      save_per_molecule_pred=False, 

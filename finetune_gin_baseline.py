@@ -1,8 +1,8 @@
 from welqrate.dataset import WelQrateDataset
-from welqrate.models.gnn2d.GIN import GIN_Model
+from welqrate.models.gnn2d.UpGIN import GIN
 import torch
 from welqrate.train import train
-from welqrate.train_aug import train as train_aug
+from welqrate.train_aug import train_aug
 import yaml
 import itertools
 import copy
@@ -87,15 +87,17 @@ os.makedirs(results_dir, exist_ok=True)
 with open(csv_file, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
-        'hidden_channels', 'num_layers', 'peak_lr',
+        'emb_dim', 'num_layer', 'drop_ratio', 'graph_pooling', 'peak_lr',
         'test_logAUC', 'test_EF', 'test_DCG', 'test_BEDROC',
         'test_EF500', 'test_EF1000', 'test_DCG500', 'test_DCG1000'
     ])
 
 def objective(trial):
     # Define hyperparameter search space
-    hidden_channels = trial.suggest_categorical('hidden_channels', [32, 64, 128])
-    num_layers = trial.suggest_int('num_layers', 2, 4)
+    emb_dim = trial.suggest_categorical('emb_dim', [128, 256, 300])
+    num_layer = trial.suggest_int('num_layer', 3, 5)
+    drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
+    graph_pooling = trial.suggest_categorical('graph_pooling', ["sum", "mean", "max"])
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/gin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
@@ -103,26 +105,32 @@ def objective(trial):
     try:
         # Update config
         config = copy.deepcopy(base_config)
-        config['MODEL']['hidden_channels'] = hidden_channels
-        config['MODEL']['num_layers'] = num_layers
+        config['MODEL']['emb_dim'] = emb_dim
+        config['MODEL']['num_layer'] = num_layer
+        config['MODEL']['drop_ratio'] = drop_ratio
+        config['MODEL']['graph_pooling'] = graph_pooling
         config['TRAIN']['peak_lr'] = peak_lr
         config['DATA']['split_scheme'] = args.split
         config['DATA']['dataset_name'] = args.dataset
+        
         # Initialize model with current params
-        model = GIN_Model(
-            in_channels=12,
-            hidden_channels=hidden_channels,
-            num_layers=num_layers,
+        model = GIN(
+            num_layer=num_layer,
+            emb_dim=emb_dim,
+            drop_ratio=drop_ratio,
+            graph_pooling=graph_pooling
         ).to(device)
         
         print(f"\nTrial {trial.number}")
-        print(f"Hidden channels: {hidden_channels}")
-        print(f"Number of layers: {num_layers}")
+        print(f"Embedding dimension: {emb_dim}")
+        print(f"Number of layers: {num_layer}")
+        print(f"Dropout ratio: {drop_ratio}")
+        print(f"Graph pooling: {graph_pooling}")
         print(f"Peak learning rate: {peak_lr}")
         
         # Train model and get metrics
         if args.aug or args.valid:
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train_aug(
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_aug(
                 model=model, 
                 config=config, 
                 device=device, 
@@ -133,7 +141,7 @@ def objective(trial):
                 dataset_name=dataset_name
             )
         else:
-            test_logAUC, test_EF100, test_DCG100, test_BEDROC, _, _, _, _ = train(
+            test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train(
                 model=model, 
                 config=config, 
                 device=device,
@@ -144,8 +152,11 @@ def objective(trial):
         # Save results to CSV
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([hidden_channels, num_layers, peak_lr, 
-                             test_logAUC, test_EF100, test_DCG100, test_BEDROC])
+            writer.writerow([
+                emb_dim, num_layer, drop_ratio, graph_pooling, peak_lr, 
+                test_logAUC, test_EF100, test_DCG100, test_BEDROC,
+                test_EF500, test_EF1000, test_DCG500, test_DCG1000
+            ])
         
         return test_BEDROC
         
@@ -155,21 +166,26 @@ def objective(trial):
         # Save error info to CSV
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([hidden_channels, num_layers, peak_lr, 
-                             float('-inf'), float('-inf'), float('-inf'), float('-inf')])
+            writer.writerow([
+                emb_dim, num_layer, drop_ratio, graph_pooling, peak_lr, 
+                float('-inf'), float('-inf'), float('-inf'), float('-inf'),
+                float('-inf'), float('-inf'), float('-inf'), float('-inf')
+            ])
         return float('-inf')  
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=24, n_jobs=4, timeout=16200)  # Adjust n_trials as needed
+study.optimize(objective, n_trials=1, n_jobs=1, timeout=16200)  # Adjust n_trials as needed
 
 # Get best parameters
 best_params = study.best_params
 best_value = study.best_value
 
 print("\nBest parameters found:")
-print(f"Hidden channels: {best_params['hidden_channels']}")
-print(f"Number of layers: {best_params['num_layers']}")
+print(f"Embedding dimension: {best_params['emb_dim']}")
+print(f"Number of layers: {best_params['num_layer']}")
+print(f"Dropout ratio: {best_params['drop_ratio']}")
+print(f"Graph pooling: {best_params['graph_pooling']}")
 print(f"Peak learning rate: {best_params['peak_lr']}")
 print(f"Best test BEDROC: {best_value:.4f}")
 
@@ -182,10 +198,11 @@ for seed in seeds:
     config = copy.deepcopy(base_config)
     config['GENERAL']['seed'] = seed
     config['TRAIN']['peak_lr'] = best_params['peak_lr']
-    # split scheme
     config['DATA']['split_scheme'] = args.split
-    config['MODEL']['hidden_channels'] = best_params['hidden_channels']
-    config['MODEL']['num_layers'] = best_params['num_layers']
+    config['MODEL']['emb_dim'] = best_params['emb_dim']
+    config['MODEL']['num_layer'] = best_params['num_layer']
+    config['MODEL']['drop_ratio'] = best_params['drop_ratio']
+    config['MODEL']['graph_pooling'] = best_params['graph_pooling']
     config['DATA']['dataset_name'] = args.dataset
     config['DATA']['split_scheme'] = args.split
 
@@ -203,10 +220,11 @@ for seed in seeds:
     
     try:
         # Initialize model with best params
-        model = GIN_Model(
-            in_channels=12,
-            hidden_channels=int(best_params['hidden_channels']),
-            num_layers=int(best_params['num_layers']),
+        model = GIN(
+            num_layer=int(best_params['num_layer']),
+            emb_dim=int(best_params['emb_dim']),
+            drop_ratio=float(best_params['drop_ratio']),
+            graph_pooling=best_params['graph_pooling']
         ).to(device)
 
         # Train model and get metrics
@@ -247,8 +265,10 @@ for seed in seeds:
             writer = csv.writer(f)
             if f.tell() == 0:  # Add header if file is empty
                 writer.writerow([
-                    'hidden_channels',
-                    'num_layers',
+                    'emb_dim',
+                    'num_layer',
+                    'drop_ratio',
+                    'graph_pooling',
                     'peak_lr', 
                     'test_logAUC',
                     'test_EF100',
@@ -261,8 +281,10 @@ for seed in seeds:
                     'seed'
                 ])
             writer.writerow([
-                best_params['hidden_channels'],
-                best_params['num_layers'],
+                best_params['emb_dim'],
+                best_params['num_layer'],
+                best_params['drop_ratio'],
+                best_params['graph_pooling'],
                 best_params['peak_lr'],
                 test_logAUC,
                 test_EF100, 

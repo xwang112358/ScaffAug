@@ -1,6 +1,6 @@
 import torch
 from welqrate.dataset import WelQrateDataset
-from welqrate.models.gnn2d.GIN import GIN_Model 
+from welqrate.models.gnn2d.UpGIN import GIN
 from welqrate.train_pseudo_label import train_pseudo_label
 import argparse
 import yaml
@@ -55,19 +55,21 @@ csv_file = f'{results_dir}/scaffaug_st_gin_finetuning_{args.dataset}_{args.split
 with open(csv_file, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
-        'hidden_channels', 'num_layers', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
+        'emb_dim', 'num_layer', 'drop_ratio', 'graph_pooling', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
         'test_logAUC', 'test_EF', 'test_DCG', 'test_BEDROC',
         'test_EF500', 'test_EF1000', 'test_DCG500', 'test_DCG1000'
     ])
 
 def objective(trial):
     # Define hyperparameter search space
-    hidden_channels = trial.suggest_categorical('hidden_channels', [32, 64, 128])
-    num_layers = trial.suggest_int('num_layers', 2, 4)
+    hidden_channels = trial.suggest_categorical('emb_dim', [32, 64, 128])
+    num_layers = trial.suggest_int('num_layer', 2, 4)
+    drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
+    graph_pooling = trial.suggest_categorical('graph_pooling', ["sum", "mean", "max"])
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
     confidence_threshold = trial.suggest_float('confidence_threshold', 0.7, 0.9)
-    pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10) # 3,10
-    start_epoch = trial.suggest_int('start_epoch', 15, 25) # 15,25
+    pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10)
+    start_epoch = trial.suggest_int('start_epoch', 15, 25)
 
     trial_dir = f"{results_dir}/{args.dataset}/{args.split}/gin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
@@ -77,26 +79,33 @@ def objective(trial):
         config = copy.deepcopy(base_config)
         config['DATA']['dataset_name'] = args.dataset
         config['DATA']['split_scheme'] = args.split
-        config['MODEL']['hidden_channels'] = hidden_channels
-        config['MODEL']['num_layers'] = num_layers
+        config['MODEL']['emb_dim'] = hidden_channels
+        config['MODEL']['num_layer'] = num_layers
+        config['MODEL']['drop_ratio'] = drop_ratio
+        config['MODEL']['graph_pooling'] = graph_pooling
         config['TRAIN']['peak_lr'] = peak_lr
         config['AUGMENTATION']['confidence_threshold'] = confidence_threshold
         config['AUGMENTATION']['pseudo_label_freq'] = pseudo_label_freq
         config['AUGMENTATION']['start_epoch'] = start_epoch
+        
         # Initialize model with current params
-        model = GIN_Model(
-            in_channels=12,
-            hidden_channels=hidden_channels,
-            num_layers=num_layers,
+        model = GIN(
+            num_layer=num_layers,
+            emb_dim=hidden_channels,
+            drop_ratio=drop_ratio,
+            graph_pooling=graph_pooling
         ).to(device)
         
         print(f"\nTrial {trial.number}")
-        print(f"Hidden channels: {hidden_channels}")
+        print(f"Embedding dimension: {hidden_channels}")
         print(f"Number of layers: {num_layers}")
+        print(f"Dropout ratio: {drop_ratio}")
+        print(f"Graph pooling: {graph_pooling}")
         print(f"Peak learning rate: {peak_lr}")
         print(f"Confidence threshold: {confidence_threshold}")
         print(f"Pseudo label frequency: {pseudo_label_freq}")
         print(f"Start epoch: {start_epoch}")
+        
         # Train model and get metrics
         test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_pseudo_label(
             model=model, 
@@ -113,7 +122,7 @@ def objective(trial):
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
-                hidden_channels, num_layers, peak_lr, confidence_threshold, pseudo_label_freq, start_epoch,
+                hidden_channels, num_layers, drop_ratio, graph_pooling, peak_lr, confidence_threshold, pseudo_label_freq, start_epoch,
                 test_logAUC, test_EF100, test_DCG100, test_BEDROC,
                 test_EF500, test_EF1000, test_DCG500, test_DCG1000
             ])
@@ -134,7 +143,7 @@ def objective(trial):
         with open(csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
-                hidden_channels, num_layers, peak_lr, confidence_threshold, pseudo_label_freq, start_epoch,
+                hidden_channels, num_layers, drop_ratio, graph_pooling, peak_lr, confidence_threshold, pseudo_label_freq, start_epoch,
                 float('-inf'), float('-inf'), float('-inf'), float('-inf'),
                 float('-inf'), float('-inf'), float('-inf'), float('-inf')
             ])
@@ -149,8 +158,10 @@ best_params = study.best_params
 best_value = study.best_value
 
 print("\nBest parameters found:")
-print(f"Hidden channels: {best_params['hidden_channels']}")
-print(f"Number of layers: {best_params['num_layers']}")
+print(f"Embedding dimension: {best_params['emb_dim']}")
+print(f"Number of layers: {best_params['num_layer']}")
+print(f"Dropout ratio: {best_params['drop_ratio']}")
+print(f"Graph pooling: {best_params['graph_pooling']}")
 print(f"Peak learning rate: {best_params['peak_lr']}")
 print(f"Confidence threshold: {best_params['confidence_threshold']}")
 print(f"Pseudo label frequency: {best_params['pseudo_label_freq']}")
@@ -165,8 +176,10 @@ for seed in seeds:
     print(f"\nRunning with seed {seed}")
     config = copy.deepcopy(base_config)
     config['GENERAL']['seed'] = seed
-    config['MODEL']['hidden_channels'] = best_params['hidden_channels']
-    config['MODEL']['num_layers'] = best_params['num_layers']
+    config['MODEL']['emb_dim'] = best_params['emb_dim']
+    config['MODEL']['num_layer'] = best_params['num_layer']
+    config['MODEL']['drop_ratio'] = best_params['drop_ratio']
+    config['MODEL']['graph_pooling'] = best_params['graph_pooling']
     config['TRAIN']['peak_lr'] = best_params['peak_lr']
     config['AUGMENTATION']['confidence_threshold'] = best_params['confidence_threshold']
     config['AUGMENTATION']['pseudo_label_freq'] = best_params['pseudo_label_freq']
@@ -177,10 +190,11 @@ for seed in seeds:
     os.makedirs(final_results_dir, exist_ok=True)
     
     try:
-        model = GIN_Model(
-            in_channels=12,
-            hidden_channels=int(best_params['hidden_channels']),
-            num_layers=int(best_params['num_layers']),
+        model = GIN(
+            num_layer=int(best_params['num_layer']),
+            emb_dim=int(best_params['emb_dim']),
+            drop_ratio=float(best_params['drop_ratio']),
+            graph_pooling=best_params['graph_pooling']
         ).to(device)
 
         test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_pseudo_label(
@@ -212,14 +226,16 @@ for seed in seeds:
             writer = csv.writer(f)
             if f.tell() == 0:  # Add header if file is empty
                 writer.writerow([
-                    'hidden_channels', 'num_layers', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
+                    'emb_dim', 'num_layer', 'drop_ratio', 'graph_pooling', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
                     'test_logAUC', 'test_EF100', 'test_DCG100', 'test_BEDROC',
                     'test_EF500', 'test_EF1000', 'test_DCG500', 'test_DCG1000',
                     'seed'
                 ])
             writer.writerow([
-                best_params['hidden_channels'],
-                best_params['num_layers'],
+                best_params['emb_dim'],
+                best_params['num_layer'],
+                best_params['drop_ratio'],
+                best_params['graph_pooling'],
                 best_params['peak_lr'],
                 best_params['confidence_threshold'],
                 best_params['pseudo_label_freq'],
