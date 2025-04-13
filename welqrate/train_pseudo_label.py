@@ -27,11 +27,16 @@ def get_train_loss(model,
     loss_list = []
 
     for i, batch in enumerate(all_loader):
+        # Skip batches with only one sample to avoid batch normalization issues
+        if len(batch) == 1:
+            print(f"Warning: Skipping batch with size 1 at iteration {i}")
+            continue
+            
         batch.to(device)
         # assert batch.edge_index.max() < batch.x.size(0), f"Edge index {batch.edge_index.max()} exceeds number of nodes"
         y_pred = model(batch)
         
-        loss= loss_fn(y_pred.view(-1), batch.y.view(-1).float())
+        loss = loss_fn(y_pred.view(-1), batch.y.view(-1).float())
             
         loss_list.append(loss.item())
         optimizer.zero_grad()
@@ -39,8 +44,12 @@ def get_train_loss(model,
         optimizer.step()
         scheduler.step()
 
+    # If we skipped all batches, return a high loss to indicate the issue
+    if not loss_list:
+        print("Warning: No valid batches processed in this epoch")
+        return float('inf')
+        
     loss = np.mean(loss_list)
-
     return loss
 
 def get_pseudo_labels(model, 
@@ -55,6 +64,11 @@ def get_pseudo_labels(model,
     
     with torch.no_grad():
         for aug_batch in aug_loader:
+            # Skip batches with only one sample
+            if len(aug_batch) == 1:
+                print("Warning: Skipping single-sample batch in pseudo-label generation")
+                continue
+                
             aug_batch.to(device)
             logits = model(aug_batch)
             probs = torch.sigmoid(logits)
@@ -66,6 +80,15 @@ def get_pseudo_labels(model,
             # Make sure these tensors are on the same device as the model
             pseudo_labels.append(pseudo_label.to(device))
             confident_mask.append(confident.to(device))
+    
+    # If no valid batches were processed, return empty tensors
+    if not pseudo_labels:
+        print("Warning: No valid batches processed for pseudo-label generation")
+        return torch.tensor([], device=device), torch.tensor([], device=device), {
+            'total_confident': 0,
+            'confident_actives': 0,
+            'confident_inactives': 0
+        }
     
     # Concatenate and keep on device
     pseudo_labels = torch.cat(pseudo_labels).to(device)
@@ -99,6 +122,10 @@ def train_pseudo_label(model,
 
     # load train info
     batch_size = int(config['TRAIN']['batch_size'])
+    # Ensure batch size is at least 2 for batch normalization
+    if batch_size < 2:
+        batch_size = 2
+        print(f"Warning: Batch size increased to {batch_size} to support batch normalization")
     num_epochs = int(config['TRAIN']['num_epochs'])
     num_workers = int(config['GENERAL']['num_workers'])
     seed = int(config['GENERAL']['seed'])
@@ -149,13 +176,11 @@ def train_pseudo_label(model,
     early_stopping_counter = 0
     print(f'Training with early stopping limit of {early_stopping_limit} epochs')
 
-    # aug_data_loader = DataLoader(aug_data_list, batch_size=batch_size)
-    
     # Initialize augmented_train_loader with original data to avoid None error
     augmented_train_loader = None
     
     with open(log_save_path, 'w+') as out_file:
-        for epoch in tqdm(range(num_epochs), desc='Training'):
+        for epoch in range(num_epochs):
             if epoch < start_epoch:
                 train_loss = get_train_loss(model=model, 
                                             all_loader=orig_train_loader, 
@@ -196,9 +221,9 @@ def train_pseudo_label(model,
                 for i in range(len(confident_aug_data)):
                     # Make sure to detach and move to CPU before assignment
                     confident_aug_data[i].y = pseudo_labels[confident_indices[i]].detach().cpu()
-                # confident_aug_data_loader = DataLoader(confident_aug_data, batch_size=batch_size)
 
                 augmented_train_data_list = orig_train_data_list + confident_aug_data
+                    
                 augmented_train_loader = get_train_loader(train_dataset = augmented_train_data_list, 
                                                           batch_size=batch_size,
                                                           num_workers=num_workers,
@@ -214,7 +239,7 @@ def train_pseudo_label(model,
                                             )
                 lr = get_lr(optimizer)
                 print(f'current_epoch={epoch} all_train_loss={train_loss:.4f} lr={lr}')
-                out_file.write(f'Epoch:{epoch}\t all_loss={train_loss}\tlr={lr}\t\n')
+                out_file.write(f'Epoch:{epoch}\t loss={train_loss}\tlr={lr}\t\n')
             else:
                 # Check if augmented_train_loader is None and use orig_train_loader as fallback
                 if augmented_train_loader is None:

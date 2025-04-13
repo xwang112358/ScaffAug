@@ -160,7 +160,12 @@ def objective(trial):
                 float('-inf'), float('-inf'), float('-inf'), float('-inf'),
                 float('-inf'), float('-inf'), float('-inf'), float('-inf')
             ])
+
+        # terminate the whole process
+        sys.exit(1)
+
         return float('-inf')
+        
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler(seed=seed))
@@ -184,7 +189,7 @@ print(f"Best test BEDROC: {best_value:.4f}")
 # Run with different seeds using best parameters
 seeds = [1, 2, 3]
 seed_results = []
-    
+
 for seed in seeds:
     print(f"\nRunning with seed {seed}")
     config = copy.deepcopy(base_config)
