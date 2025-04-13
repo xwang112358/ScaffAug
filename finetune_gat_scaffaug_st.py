@@ -1,6 +1,6 @@
 import torch
 from welqrate.dataset import WelQrateDataset
-from welqrate.models.gnn2d.GCN import GCN_Model 
+from welqrate.models.gnn2d.GAT import GAT_Model 
 from welqrate.train_pseudo_label import train_pseudo_label
 import argparse
 import yaml
@@ -18,6 +18,7 @@ from welqrate.loader import get_train_loader, get_valid_loader, get_test_loader
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='AID1798', required=True)
 parser.add_argument('--split', type=str, default='random_cv1', required=True)
+parser.add_argument('--sampling_method', type=str, default='sabs', required=True)
 args = parser.parse_args()
 
 # Load base config
@@ -25,7 +26,7 @@ with open('./configs/scaffaug.yaml') as file:
     base_config = yaml.safe_load(file)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-augmented_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
+augmented_dataset = torch.load(f'./{args.sampling_method}/{args.dataset}_{args.split}_0.1_generated_graphs.pt')
 original_dataset = WelQrateDataset(dataset_name=args.dataset, root='./welqrate_datasets', mol_repr='2dmol')
 split_dict = original_dataset.get_idx_split(args.split)
 
@@ -45,19 +46,29 @@ valid_loader = get_valid_loader(valid_data, batch_size=batch_size, num_workers=n
 test_loader = get_test_loader(test_data, batch_size=batch_size, num_workers=num_workers, seed=seed)
 
 # Create results directory
-results_dir = 'scaffaug_results'
+results_dir = 'scaffaug_gat_results'
 os.makedirs(results_dir, exist_ok=True)
 
 # Create CSV file with headers
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-csv_file = f'{results_dir}/scaffaug_st_gcn_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+finetuning_csv_file = f'{results_dir}/gat_scaffaug_st_finetuning_{args.dataset}_{args.split}_{timestamp}.csv'
+final_results_csv = f'{results_dir}/gat_scaffaug_st_final_{args.dataset}_{args.split}_{timestamp}.csv'
 
-with open(csv_file, 'w', newline='') as f:
+with open(finetuning_csv_file, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow([
-        'hidden_channels', 'num_layers', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
+        'hidden_channels', 'num_layers', 'peak_lr', 'heads', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
         'test_logAUC', 'test_EF', 'test_DCG', 'test_BEDROC',
         'test_EF500', 'test_EF1000', 'test_DCG500', 'test_DCG1000'
+    ])
+
+with open(final_results_csv, 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow([
+        'hidden_channels', 'num_layers', 'peak_lr', 'heads', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
+        'test_logAUC', 'test_EF100', 'test_DCG100', 'test_BEDROC',
+        'test_EF500', 'test_EF1000', 'test_DCG500', 'test_DCG1000',
+        'seed'
     ])
 
 def objective(trial):
@@ -65,11 +76,12 @@ def objective(trial):
     hidden_channels = trial.suggest_categorical('hidden_channels', [32, 64, 128])
     num_layers = trial.suggest_int('num_layers', 2, 4)
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
+    heads = trial.suggest_categorical('heads', [4, 8])
     confidence_threshold = trial.suggest_float('confidence_threshold', 0.7, 0.9)
     pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10)
     start_epoch = trial.suggest_int('start_epoch', 15, 25)
 
-    trial_dir = f"{results_dir}/{args.dataset}/{args.split}/gcn/trial{trial.number}"
+    trial_dir = f"{results_dir}/{args.dataset}/{args.split}/gat/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
 
     try:
@@ -79,24 +91,30 @@ def objective(trial):
         config['DATA']['split_scheme'] = args.split
         config['MODEL']['hidden_channels'] = hidden_channels
         config['MODEL']['num_layers'] = num_layers
+        config['MODEL']['heads'] = heads
         config['TRAIN']['peak_lr'] = peak_lr
         config['AUGMENTATION']['confidence_threshold'] = confidence_threshold
         config['AUGMENTATION']['pseudo_label_freq'] = pseudo_label_freq
         config['AUGMENTATION']['start_epoch'] = start_epoch
+        config['MODEL']['model_name'] = 'gat'
+        
         # Initialize model with current params
-        model = GCN_Model(
+        model = GAT_Model(
             in_channels=12,
             hidden_channels=hidden_channels,
             num_layers=num_layers,
+            heads=heads,
         ).to(device)
         
         print(f"\nTrial {trial.number}")
         print(f"Hidden channels: {hidden_channels}")
         print(f"Number of layers: {num_layers}")
+        print(f"Number of heads: {heads}")
         print(f"Peak learning rate: {peak_lr}")
         print(f"Confidence threshold: {confidence_threshold}")
         print(f"Pseudo label frequency: {pseudo_label_freq}")
         print(f"Start epoch: {start_epoch}")
+        
         # Train model and get metrics
         test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_pseudo_label(
             model=model, 
@@ -110,10 +128,10 @@ def objective(trial):
         )
 
         # Save results to CSV
-        with open(csv_file, 'a', newline='') as f:
+        with open(finetuning_csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
-                hidden_channels, num_layers, peak_lr, confidence_threshold, pseudo_label_freq, start_epoch,
+                hidden_channels, num_layers, peak_lr, heads, confidence_threshold, pseudo_label_freq, start_epoch,
                 test_logAUC, test_EF100, test_DCG100, test_BEDROC,
                 test_EF500, test_EF1000, test_DCG500, test_DCG1000
             ])
@@ -124,10 +142,10 @@ def objective(trial):
         print(f"Error occurred in trial {trial.number}")
         print(f"Error message: {str(e)}")
         # Save error info to CSV
-        with open(csv_file, 'a', newline='') as f:
+        with open(finetuning_csv_file, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
-                hidden_channels, num_layers, peak_lr, confidence_threshold, pseudo_label_freq, start_epoch,
+                hidden_channels, num_layers, peak_lr, heads, confidence_threshold, pseudo_label_freq, start_epoch,
                 float('-inf'), float('-inf'), float('-inf'), float('-inf'),
                 float('-inf'), float('-inf'), float('-inf'), float('-inf')
             ])
@@ -144,6 +162,7 @@ best_value = study.best_value
 print("\nBest parameters found:")
 print(f"Hidden channels: {best_params['hidden_channels']}")
 print(f"Number of layers: {best_params['num_layers']}")
+print(f"Number of heads: {best_params['heads']}")
 print(f"Peak learning rate: {best_params['peak_lr']}")
 print(f"Confidence threshold: {best_params['confidence_threshold']}")
 print(f"Pseudo label frequency: {best_params['pseudo_label_freq']}")
@@ -160,19 +179,22 @@ for seed in seeds:
     config['GENERAL']['seed'] = seed
     config['MODEL']['hidden_channels'] = best_params['hidden_channels']
     config['MODEL']['num_layers'] = best_params['num_layers']
+    config['MODEL']['heads'] = best_params['heads']
     config['TRAIN']['peak_lr'] = best_params['peak_lr']
     config['AUGMENTATION']['confidence_threshold'] = best_params['confidence_threshold']
     config['AUGMENTATION']['pseudo_label_freq'] = best_params['pseudo_label_freq']
+    config['AUGMENTATION']['start_epoch'] = best_params['start_epoch']
     config['DATA']['split_scheme'] = args.split
-
-    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/scaffaug/seed{seed}'
+    config['MODEL']['model_name'] = 'gat'
+    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/gat/seed{seed}'
     os.makedirs(final_results_dir, exist_ok=True)
     
     try:
-        model = GCN_Model(
+        model = GAT_Model(
             in_channels=12,
             hidden_channels=int(best_params['hidden_channels']),
             num_layers=int(best_params['num_layers']),
+            heads=int(best_params['heads']),
         ).to(device)
 
         test_logAUC, test_EF100, test_DCG100, test_BEDROC, test_EF500, test_EF1000, test_DCG500, test_DCG1000 = train_pseudo_label(
@@ -199,20 +221,13 @@ for seed in seeds:
         })
 
         # Save seed results to CSV
-        final_results_csv = f'{results_dir}/scaffaug_st_gcn_final_{args.dataset}_{args.split}_{timestamp}.csv'
         with open(final_results_csv, 'a', newline='') as f:
             writer = csv.writer(f)
-            if f.tell() == 0:  # Add header if file is empty
-                writer.writerow([
-                    'hidden_channels', 'num_layers', 'peak_lr', 'confidence_threshold', 'pseudo_label_freq', 'start_epoch',
-                    'test_logAUC', 'test_EF100', 'test_DCG100', 'test_BEDROC',
-                    'test_EF500', 'test_EF1000', 'test_DCG500', 'test_DCG1000',
-                    'seed'
-                ])
             writer.writerow([
                 best_params['hidden_channels'],
                 best_params['num_layers'],
                 best_params['peak_lr'],
+                best_params['heads'],
                 best_params['confidence_threshold'],
                 best_params['pseudo_label_freq'],
                 best_params['start_epoch'],
@@ -269,9 +284,5 @@ if seed_results:
         ]
     }
     summary_df = pd.DataFrame(summary_stats)
-    summary_csv = f'{results_dir}/scaffaug_summary_stats_{args.dataset}_{args.split}_{timestamp}.csv'
+    summary_csv = f'{results_dir}/gat_scaffaug_st_summary_stats_{args.dataset}_{args.split}_{timestamp}.csv'
     summary_df.to_csv(summary_csv, index=False)
-        
-        
-    
-        
