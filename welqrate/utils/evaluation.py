@@ -22,7 +22,6 @@ def R2(true_y, predicted_score):
     return 1 - SS_res / SS_tot
 
 
-
 def calculate_logAUC(true_y, predicted_score, FPR_range=(0.001, 0.1)):
     """
     Author: Yunchao "Lance" Liu (lanceknight26@gmail.com)
@@ -180,3 +179,78 @@ def cal_BEDROC_score(true_y, predicted_score, decreasing=True, alpha=20.0):
     cte = 1 / (1 - np.exp(alpha * (1 - r_a)))
 
     return s * fac / rand_sum + cte
+
+
+#### -- NEW EVALUATION METRICS -- ####
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.Chem.Scaffolds import MurckoScaffold
+from rdkit.DataStructs import TanimotoSimilarity, BulkTanimotoSimilarity
+
+class CombinedMetric:
+    def __init__(self, smiles_list, true_y, predicted_score, scaffold=True):
+        self.ecfps = []
+        self.active_ecfps = []
+        self.sorted_ecfps = []
+        self.scaffold = scaffold
+        
+        # Validate and process all molecules first
+        self._process_molecules(smiles_list, true_y)
+        
+        # Sort by predicted score
+        sort_idx = np.argsort(-predicted_score)
+        self.sorted_ecfps = [self.ecfps[i] for i in sort_idx]
+        
+    def _process_molecules(self, smiles_list, true_y):
+        """Process all molecules with strict validity checks"""
+        active_indices = set(np.where(true_y == 1)[0])
+        
+        for idx, smiles in enumerate(smiles_list):
+            # Generate base molecule with validity check
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                raise ValueError(f"Invalid SMILES at index {idx}: {smiles}")
+                
+            # Generate target representation
+            if self.scaffold:
+                target_mol = MurckoScaffold.GetScaffoldForMol(mol)
+                if target_mol.GetNumAtoms() == 0:  # Empty scaffold check
+                    raise ValueError(f"Empty scaffold generated for SMILES: {smiles}")
+            else:
+                target_mol = mol
+                
+            # Generate ECFP4 fingerprint
+            fp = AllChem.GetMorganFingerprintAsBitVect(target_mol, 2, 1024)
+            self.ecfps.append(fp)
+            
+            if idx in active_indices:
+                self.active_ecfps.append(fp)
+    
+    def get_S(self, k):
+        """Calculate similarity component for top-k predictions"""
+        if not self.active_ecfps or k == 0:
+            return 0.0
+            
+        top_k = self.sorted_ecfps[:k]
+        return np.mean([max(BulkTanimotoSimilarity(fp, self.active_ecfps)) 
+                       for fp in top_k])
+    
+    def get_D(self, k):
+        """Calculate diversity component for top-k predictions"""
+        if k <= 1:
+            return 0.0
+            
+        top_k = self.sorted_ecfps[:k]
+        similarities = []
+        
+        for i, fp in enumerate(top_k[:-1]):
+            similarities.extend(BulkTanimotoSimilarity(fp, top_k[i+1:]))
+            
+        return 1 - np.mean(similarities) if similarities else 0.0
+    
+    def get_F(self, k, beta=1):
+        """Calculate combined F-score with optional beta weighting"""
+        S = self.get_S(k)
+        D = self.get_D(k)
+        denominator = (beta**2 * S + D)
+        return (1 + beta**2) * S * D / denominator if denominator != 0 else 0.0
