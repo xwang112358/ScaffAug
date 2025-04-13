@@ -45,7 +45,7 @@ def calculate_logAUC(true_y, predicted_score, FPR_range=(0.001, 0.1)):
     Desolvation in Molecular Docking. Journal of Chemical Information and
     Modeling, 2010. 50(9): p. 1561-1573.
     [2] Mendenhall, J. and J. Meiler, Improving quantitative
-    structure–activity relationship models using Artificial Neural Networks
+    structure-activity relationship models using Artificial Neural Networks
     trained with dropout. Journal of computer-aided molecular design,
     2016. 30(2): p. 177-189.
     :param true_y: numpy array of the ground truth. Values are either 0 (
@@ -254,3 +254,101 @@ class CombinedMetric:
         D = self.get_D(k)
         denominator = (beta**2 * S + D)
         return (1 + beta**2) * S * D / denominator if denominator != 0 else 0.0
+    
+
+class DiverseReranking:
+    def __init__(self, smiles_list, predicted_scores, true_y, scaffold=True, topk=1000):
+        self.smiles = smiles_list
+        self.true_y = true_y
+        self.scaffold = scaffold
+        self.topk = topk
+        
+        # Process molecules and generate fingerprints
+        self._process_molecules()
+        
+        # Sort and select topk
+        self._sort_and_select_topk(predicted_scores)
+        
+        # Precompute similarity matrix
+        self._precompute_similarity_matrix()
+        
+        # Initialize reranking state
+        self.reranked_indices = None
+        self.new_scores = None
+
+    def _process_molecules(self):
+        self.ecfps = []
+        for smiles in self.smiles:
+            mol = Chem.MolFromSmiles(smiles)
+            if not mol:
+                raise ValueError(f"Invalid SMILES: {smiles}")
+            
+            if self.scaffold:
+                scaffold_mol = MurckoScaffold.GetScaffoldForMol(mol)
+                target_mol = scaffold_mol
+            else:
+                target_mol = mol
+                
+            fp = AllChem.GetMorganFingerprintAsBitVect(target_mol, 2, 1024)
+            self.ecfps.append(fp)
+
+    def _sort_and_select_topk(self, predicted_scores):
+        sorted_idx = np.argsort(-predicted_scores)
+        self.topk_idx = sorted_idx[:self.topk]
+        self.topk_fps = [self.ecfps[i] for i in self.topk_idx]
+        self.topk_scores = predicted_scores[self.topk_idx]
+
+    def _precompute_similarity_matrix(self):
+        self.sim_matrix = np.zeros((self.topk, self.topk))
+        for i in range(self.topk):
+            # Only calculate similarities for j > i
+            for j in range(i + 1, self.topk):
+                sim = TanimotoSimilarity(self.topk_fps[i], self.topk_fps[j])
+                self.sim_matrix[i, j] = sim
+                self.sim_matrix[j, i] = sim  # Mirror the similarity
+            self.sim_matrix[i, i] = 1.0  # Self-similarity is 1.0
+
+    def rerank(self, lambda_val=0.6):
+        """
+        Reranking algorithm based on MMR (Maximal Marginal Relevance)
+        lambda_val: the trade-off between relevance and diversity
+        """
+        remaining = list(range(self.topk))
+        selected = [np.argmax(self.topk_scores)]  # Start with highest score
+        remaining.remove(selected[0])
+
+        for _ in range(self.topk - 1):
+            if not remaining:
+                break
+                
+            # Get scores for all candidates
+            mmr_scores = []
+            for candidate in remaining:
+                rel = sigmoid(self.topk_scores[candidate])
+                max_sim = np.max(self.sim_matrix[candidate][selected])
+                mmr = lambda_val * rel - (1 - lambda_val) * max_sim
+                mmr_scores.append(mmr)
+            
+            # Select best candidate
+            best_idx = remaining[np.argmax(mmr_scores)]
+            selected.append(best_idx)
+            remaining.remove(best_idx)
+
+        # Map to original indices and create new scores
+        self.reranked_indices = [self.topk_idx[i] for i in selected]
+        self._create_new_scores()
+
+    def _create_new_scores(self):
+        self.new_scores = np.copy(self.topk_scores)
+        offset = np.max(self.new_scores) + 1
+        self.new_scores = offset - np.arange(len(self.new_scores))
+        
+        full_scores = np.copy(self.true_y.astype(float))
+        full_scores[self.topk_idx] = self.new_scores
+        self.new_scores = full_scores
+
+    def get_EF(self, k):
+        return cal_EF(self.true_y, self.new_scores, k)
+
+    def get_DCG(self, k):
+        return cal_DCG(self.true_y, self.new_scores, k)
