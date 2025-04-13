@@ -17,4 +17,4 @@ AUGMENTATION:
   pseudo_label_freq: 3
   start_epoch: 15
 MODEL:
-  model_name: gcn
+  model_name: deepgin

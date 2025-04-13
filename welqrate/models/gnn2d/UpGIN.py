@@ -28,6 +28,8 @@ class GINConv(MessagePassing):
    def forward(self, x, edge_index, edge_attr):
        # Transform edge attributes if they exist
        if edge_attr is not None:
+           # Convert edge attributes to float type before embedding
+           edge_attr = edge_attr.float()
            edge_attr = self.edge_embedding(edge_attr)
        
        out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_attr))

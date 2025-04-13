@@ -126,7 +126,7 @@ def train_pseudo_label(model,
 
     # load optimizer and scheduler
     optimizer = AdamW(model.parameters(), weight_decay=weight_decay)
-    scheduler = get_scheduler(optimizer, config, orig_train_data_list)
+    scheduler = get_scheduler(optimizer, config, len(orig_train_data_list))
     
     print('\n' + '=' * 10 + f"Training {model} on {dataset_name}'s {split_scheme} split" '\n' + '=' * 10 )
     
