@@ -46,7 +46,7 @@ valid_loader = get_valid_loader(valid_data, batch_size=batch_size, num_workers=n
 test_loader = get_test_loader(test_data, batch_size=batch_size, num_workers=num_workers, seed=seed)
 
 # Create results directory
-results_dir = 'scaffaug_gat_results'
+results_dir = f'scaffaug_gat_st_{args.sampling_method}_results'
 os.makedirs(results_dir, exist_ok=True)
 
 # Create CSV file with headers
@@ -153,7 +153,7 @@ def objective(trial):
 
 # Create study object and optimize
 study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler(seed=seed))
-study.optimize(objective, n_trials=36, n_jobs=4, timeout=16200)  # Adjust n_trials as needed
+study.optimize(objective, n_trials=16, n_jobs=4, timeout=16200)  # Adjust n_trials as needed
 
 # Get best parameters
 best_params = study.best_params

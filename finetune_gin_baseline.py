@@ -24,7 +24,7 @@ parser.add_argument('--valid', action='store_true')
 args = parser.parse_args()
 
 # Load base config
-with open('./configs/upgin.yaml') as file:
+with open('./configs/deepgin.yaml') as file:
     base_config = yaml.safe_load(file)
 
 # Setup dataset
@@ -50,7 +50,7 @@ test_loader = get_test_loader(dataset[split_dict['test']], batch_size, num_worke
 
 if args.aug:
     results_dir = 'results_aug'
-    csv_file = f'results_aug/upgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    csv_file = f'results_aug/deepgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
     aug_dataset = torch.load(f'./augment_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_pyg_graphs_labels.pt')
     
     # Process original dataset
@@ -65,7 +65,7 @@ if args.aug:
 elif args.valid:
     aug_dataset = torch.load(f'./augment_valid_pyg_graphs_labels/{args.dataset}_{args.split}_0.1_augment_valid_pyg_graphs_labels.pt')
     results_dir = 'results_valid_aug'
-    csv_file = f'results_valid_aug/upgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    csv_file = f'results_valid_aug/deepgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
     
     # Process original dataset
     train_list = []
@@ -77,7 +77,7 @@ elif args.valid:
     train_loader = get_train_loader(train_list, batch_size, num_workers, seed)
 else:
     results_dir = 'results'
-    csv_file = f'results/upgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    csv_file = f'results/deepgin_finetuning_{dataset_name}_{split_scheme}_{timestamp}.csv'
     
     # Create train loader for non-augmented case
     train_loader = get_train_loader(dataset[split_dict['train']], batch_size, num_workers, seed)
@@ -94,12 +94,12 @@ with open(csv_file, 'w', newline='') as f:
 
 def objective(trial):
     # Define hyperparameter search space
-    emb_dim = trial.suggest_categorical('emb_dim', [128, 256, 300])
+    emb_dim = trial.suggest_categorical('emb_dim', [64,128, 256])
     num_layer = trial.suggest_int('num_layer', 3, 5)
-    drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
-    graph_pooling = "sum"  # Fixed to 'sum' instead of tuning
+    drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.3)
+    graph_pooling = "sum"  
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
-    trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/upgin/trial{trial.number}"
+    trial_dir = f"{results_dir}/{dataset_name}/{split_scheme}/deepgin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
     
     try:
@@ -208,7 +208,7 @@ for seed in seeds:
     config['DATA']['dataset_name'] = args.dataset
     config['DATA']['split_scheme'] = args.split
 
-    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/upgin/seed{seed}'
+    final_results_dir = f'{results_dir}/{args.dataset}/{args.split}/deepgin/seed{seed}'
     os.makedirs(final_results_dir, exist_ok=True)
     
     # Update only the train_loader with the current seed
@@ -344,7 +344,7 @@ if seed_results:
         ]
     }
     summary_df = pd.DataFrame(summary_stats)
-    summary_csv = f'{results_dir}/upgin_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
+    summary_csv = f'{results_dir}/deepgin_summary_stats_{dataset_name}_{split_scheme}_{timestamp}.csv'
     summary_df.to_csv(summary_csv, index=False)
 
 

@@ -46,7 +46,7 @@ valid_loader = get_valid_loader(valid_data, batch_size=batch_size, num_workers=n
 test_loader = get_test_loader(test_data, batch_size=batch_size, num_workers=num_workers, seed=seed)
 
 # Create results directory
-results_dir = 'scaffaug_deepgin_results'
+results_dir = f'scaffaug_deepgin_st_{args.sampling_method}_results'
 os.makedirs(results_dir, exist_ok=True)
 
 # Create CSV file with headers
@@ -74,14 +74,14 @@ with open(final_results_csv, 'w', newline='') as f:
 
 def objective(trial):
     # Define hyperparameter search space
-    hidden_channels = trial.suggest_categorical('emb_dim', [32, 64, 128])
-    num_layers = trial.suggest_int('num_layer', 2, 4)
-    drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.5)
-    graph_pooling = "sum"  # Fixed to 'sum' instead of tuning
+    hidden_channels = trial.suggest_categorical('emb_dim', [64,128,256])
+    num_layers = trial.suggest_int('num_layer', 3, 5)
+    drop_ratio = trial.suggest_float('drop_ratio', 0.1, 0.3)
+    graph_pooling = "sum"  # Fixed to 'sum' instead of tunings
     peak_lr = trial.suggest_float('peak_lr', 1e-4, 1e-2, log=True)
-    confidence_threshold = trial.suggest_float('confidence_threshold', 0.7, 0.9)
+    confidence_threshold = trial.suggest_categorical('confidence_threshold', [0.75, 0.8, 0.85, 0.9])
     pseudo_label_freq = trial.suggest_int('pseudo_label_freq', 3, 10)
-    start_epoch = trial.suggest_int('start_epoch', 15, 25)
+    start_epoch = trial.suggest_int('start_epoch', 20, 30)
 
     trial_dir = f"{results_dir}/{args.dataset}/{args.split}/deepgin/trial{trial.number}"
     os.makedirs(trial_dir, exist_ok=True)
