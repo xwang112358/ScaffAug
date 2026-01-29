@@ -38,19 +38,6 @@ g++ -O2 -std=c++11 -o orca orca.cpp
 
 The `finetune_deepgin_scaffaug_st.py` script is used for fine-tuning DeepGIN models with scaffold-aware augmentation using self-training and pseudo-labeling techniques. This script performs hyperparameter optimization using Optuna and evaluates the best model across multiple random seeds.
 
-### Prerequisites
-
-Before running the script, ensure you have:
-
-1. **Augmented dataset files**: The script expects augmented dataset files in the format:
-   ```
-   ./{sampling_method}/{dataset}_{split}_0.1_generated_graphs.pt
-   ```
-   where `sampling_method` is typically "sabs" (Scaffold-aware Balanced Sampling).
-
-2. **WelQrate datasets**: Original datasets should be available in `./welqrate_datasets/` directory.
-
-3. **Configuration file**: The script uses `./configs/scaffaug.yaml` for base configuration.
 
 ### Command Line Arguments
 
@@ -113,26 +100,5 @@ The script generates several output files in the `scaffaug_deepgin_st_{sampling_
    ```
    deepgin_scaffaug_st_summary_stats_{dataset}_{split}_{timestamp}.csv
    ```
-
-### Performance Metrics
-
-The script evaluates models using multiple metrics:
-- **logAUC**: Logarithmic Area Under the Curve
-- **EF100/EF500/EF1000**: Enrichment Factor at top 100/500/1000 compounds
-- **DCG100/DCG500/DCG1000**: Discounted Cumulative Gain at top 100/500/1000 compounds  
-- **BEDROC**: Boltzmann-Enhanced Discrimination of ROC
-
-### Expected Runtime
-
-The script performs hyperparameter optimization followed by evaluation across 3 random seeds, which can take several hours depending on:
-- Dataset size
-- Hardware specifications (GPU recommended)
-- Number of optimization trials (default: 16)
-
-### Troubleshooting
-
-1. **Missing augmented dataset**: Ensure the augmented dataset file exists in the expected path format.
-2. **CUDA memory issues**: Reduce batch size in `configs/scaffaug.yaml` if encountering GPU memory errors.
-3. **Configuration errors**: Verify that `configs/scaffaug.yaml` exists and contains valid parameters.
 
 
