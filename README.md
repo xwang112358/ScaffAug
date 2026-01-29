@@ -38,6 +38,10 @@ g++ -O2 -std=c++11 -o orca orca.cpp
 
 The `finetune_deepgin_scaffaug_st.py` script is used for fine-tuning DeepGIN models with scaffold-aware augmentation using self-training and pseudo-labeling techniques. This script performs hyperparameter optimization using Optuna and evaluates the best model across multiple random seeds.
 
+### Unzip augmentation dataset 
+
+unzip augment_valid_pyg_graphs_labels.zip
+
 
 ### Command Line Arguments
 
