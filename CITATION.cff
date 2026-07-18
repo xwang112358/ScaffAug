@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the following paper."
+title: "Scaffold-Aware Generative Augmentation and Reranking for Enhanced Virtual Screening"
+authors:
+  - family-names: Wang
+    given-names: Xin
+  - family-names: Wang
+    given-names: Yu
+  - family-names: Liu
+    given-names: Yunchao
+  - family-names: Meiler
+    given-names: Jens
+  - family-names: Derr
+    given-names: Tyler
+year: 2025
+identifiers:
+  - type: other
+    value: "arXiv:2510.16306"
+    description: arXiv preprint
+preferred-citation:
+  type: article
+  title: "Scaffold-Aware Generative Augmentation and Reranking for Enhanced Virtual Screening"
+  authors:
+    - family-names: Wang
+      given-names: Xin
+    - family-names: Wang
+      given-names: Yu
+    - family-names: Liu
+      given-names: Yunchao
+    - family-names: Meiler
+      given-names: Jens
+    - family-names: Derr
+      given-names: Tyler
+  journal: "arXiv preprint arXiv:2510.16306"
+  year: 2025

@@ -1,0 +1,23 @@
+# Base configuration for the unified ScaffAug runner (run.py).
+# Override any field from the CLI (e.g. --epochs, --seed) or by editing this file.
+GENERAL:
+  seed: 1
+  num_workers: 0
+DATA:
+  dataset_name: AID1798        # set by --dataset
+  split_scheme: random_cv1     # set by --split
+TRAIN:
+  num_epochs: 150
+  batch_size: 128
+  warmup_iterations: 5000
+  peak_lr: 1.0e-3
+  end_lr: 1.0e-6
+  weight_decay: 1.0e-2
+  early_stop: 100
+MODEL:
+  model_name: deepgin          # set by --model; per-model hp defaults live in welqrate/registry.py
+AUGMENTATION:                  # used by method=selftrain
+  confidence_threshold: 0.9
+  aug_weight: 1.0
+  pseudo_label_freq: 6
+  start_epoch: 25

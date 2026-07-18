@@ -1,11 +1,34 @@
+# --- generated data / results (regenerable; not for version control) ---
 results
-welqrate_datasets
-arxiv
-generated_graphs
-augment_pyg_datasets
-scaffaug_results
-augment_datasets
-augment_pyg_graphs_labels
 results_aug
-augment_valid_pyg_graphs_labels
 results_valid_aug
+scaffaug_results
+welqrate_datasets
+generated_graphs
+augment_datasets
+augment_pyg_datasets
+augment_pyg_graphs_labels
+augment_valid_pyg_graphs_labels
+arxiv
+
+# --- checkpoints / logs ---
+*.ckpt
+*.pt
+checkpoints/
+wandb/
+*.log
+output.txt
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.ipynb_checkpoints/
+
+# --- os / editor ---
+.DS_Store
+.vscode/
+.idea/
